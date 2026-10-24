@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kick Zone Coach</title>
+<style>
+:root{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--acc:#16a34a;--inp:#f8fafc;--red:#dc2626;--org:#f97316;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#020617;--card:#0f172a;--ink:#e2e8f0;--mut:#94a3b8;--line:#1e293b;--acc:#22c55e;--inp:#020617;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#020617;--card:#0f172a;--ink:#e2e8f0;--mut:#94a3b8;--line:#1e293b;--acc:#22c55e;--inp:#020617;color-scheme:dark}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{position:sticky;top:env(safe-area-inset-top,0px);background:var(--card);border-bottom:1px solid var(--line);padding:12px 16px;z-index:5}
+h1{margin:0 0 8px;font-size:18px;color:var(--acc);text-transform:uppercase;letter-spacing:.05em}
+nav{display:flex;gap:6px;overflow-x:auto}
+nav button{flex:none;border:1px solid transparent;background:none;color:var(--mut);padding:8px 14px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer}
+nav button.on{color:var(--acc);border-color:var(--acc);background:color-mix(in srgb,var(--acc) 12%,transparent)}
+main{max-width:1000px;margin:0 auto;padding:16px;display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+h3{margin:0 0 12px;font-size:16px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}.row>*{flex:1 1 150px}
+input,select,textarea{width:100%;background:var(--inp);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font:inherit}
+label{display:block;font-size:12px;color:var(--mut);margin-bottom:3px}
+button.b{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:10px 18px;font:inherit;font-weight:600;cursor:pointer}
+button.b:disabled{opacity:.4}button.x{background:none;border:0;color:var(--mut);cursor:pointer;font-size:16px;padding:6px}button.x:hover{color:var(--red)}
+.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}th{color:var(--mut);font-size:13px}
+.tag{background:var(--line);border-radius:5px;padding:2px 8px;font-size:12px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;cursor:pointer;background:var(--inp)}
+.item.on{border-color:var(--acc)}.mut{color:var(--mut);font-size:13px}
+.seg{display:flex;gap:4px}.seg button{border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:6px;padding:5px 11px;font-weight:700;cursor:pointer}
+.seg .p.on{background:#16a34a;color:#fff}.seg .a.on{background:#dc2626;color:#fff}.seg .i.on{background:#f97316;color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.drill{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card);position:relative}
+.drill img{width:100%;height:170px;object-fit:cover;display:block;background:var(--inp)}
+.drill .t{padding:12px}.drill .del{position:absolute;top:6px;right:6px;background:var(--red);color:#fff;border-radius:8px}.drill .dl{position:absolute;top:6px;right:44px;background:#2563eb;color:#fff;border-radius:8px}
+.cat{color:var(--acc);font-size:12px;font-weight:700;text-transform:uppercase}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:760px){.two{grid-template-columns:1fr}}
+.pick{max-height:260px;overflow-y:auto}.num{display:inline-flex;width:24px;height:24px;border-radius:6px;background:color-mix(in srgb,var(--acc) 20%,transparent);color:var(--acc);align-items:center;justify-content:center;font-weight:700;font-size:12px;margin-right:8px}
+.big{width:100%;max-height:260px;object-fit:contain;background:#000;border-radius:8px;margin-top:8px}
+.note{font-size:13px;color:var(--ink);text-align:center;position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));z-index:9}#st:empty{display:none}body{padding-bottom:64px}
+</style></head><body>
+<header><h1>⚽ Kick Zone Coach</h1><nav id="nav"></nav></header>
+<main id="app"></main>
+<div class="note" id="st"></div>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fd=d=>d?new Date(d).toLocaleDateString("it-IT"):"-";
+const today=()=>new Date().toISOString().split("T")[0];
+const TABS=[["rosa","Rosa"],["presenze","Presenze"],["esercizi","Esercizi"],["sedute","Sedute"]];
+const CATS=["Tattica","Tecnica","Fisico","Partita a tema","Altro"];
+let items=[],tab="rosa",selEv=null,picked=[],viewS=null,bulk="",store=null;
+const by=k=>items.filter(i=>i.kind===k);
+const byName=(k,f)=>by(k).sort((a,b)=>String(a[f]).localeCompare(String(b[f])));
+const byDate=k=>by(k).sort((a,b)=>new Date(b.date)-new Date(a.date));
+const opts=a=>a.map(x=>`<option>${x}</option>`).join("");
+
+async function init(){
+  let db=null,user=null,uid=null;
+  try{db=await claude.use("db");user=await claude.use("user");uid=user?await user.id():null}catch(e){}
+  if(db&&uid){
+    const col=db.collection("data/users/"+uid);
+    store={save:o=>col.doc(o.id).set(o).catch(e=>$("#st").textContent="Salvataggio non riuscito"),del:id=>col.doc(id).delete().catch(()=>{})};
+    col.onSnapshot(s=>{items=s.docs.map(d=>Object.assign({},d.data(),{id:d.id}));fill()},()=>{$("#st").textContent="Dati non disponibili"});
+    $("#st").textContent="Salvataggio nel cloud attivo";
+  }else{
+    try{items=JSON.parse(localStorage.getItem("kzc")||"[]")}catch(e){items=[]}
+    const persist=()=>{try{localStorage.setItem("kzc",JSON.stringify(items))}catch(e){}};
+    store={save:o=>{const i=items.findIndex(x=>x.id===o.id);i<0?items.push(o):items[i]=o;persist();fill()},del:id=>{items=items.filter(x=>x.id!==id);persist();fill()}};
+    $("#st").textContent="Dati salvati solo su questo dispositivo";
+  }
+  render();
+}
+
+function render(){
+  $("#nav").innerHTML=TABS.map(([id,l])=>`<button data-act="tab" data-id="${id}" class="${tab===id?"on":""}">${l}</button>`).join("");
+  $("#app").innerHTML=shell[tab]();fill();
+}
+function fill(){const f=fills[tab];if(f)f()}
+
+const shell={
+rosa:()=>`<form class="card" data-f="player"><h3>Aggiungi giocatore</h3><div class="row">
+<div style="flex:2 1 200px"><label>Nome e cognome</label><input name="name" required></div>
+<div><label>Ruolo</label><select name="position">${opts(["Portiere","Difensore","Centrocampista","Attaccante"])}</select></div>
+<div><label>Data di nascita</label><input type="date" name="birth"></div>
+<div style="flex:0 0 auto"><button class="b">Salva</button></div></div></form>
+<div class="card scroll"><table><thead><tr><th>Nome</th><th>Ruolo</th><th>Nascita</th><th></th></tr></thead><tbody id="l"></tbody></table></div>`,
+presenze:()=>`<div class="two"><div><form class="card" data-f="event"><h3>Nuovo evento</h3><div class="row"><input type="date" name="date" value="${today()}" required><select name="type">${opts(["Allenamento","Partita"])}</select><button class="b" style="flex:0 0 auto">Crea registro</button></div></form><div id="evl" style="margin-top:16px"></div></div><div class="card" id="evd"></div></div>`,
+esercizi:()=>`<div class="two"><form class="card" data-f="drill"><h3>Nuovo esercizio</h3>
+<div class="row"><div style="flex:2 1 160px"><input name="title" placeholder="Titolo" required></div><input name="duration" placeholder="Minuti"><input name="age" placeholder="Età (es. U15)"><select name="category">${opts(CATS)}</select></div>
+<textarea name="description" rows="3" placeholder="Descrizione dell’esercizio…" style="margin:10px 0"></textarea>
+<div class="row"><input type="file" name="img" accept="image/*"><button class="b" style="flex:0 0 auto">Salva</button></div></form>
+<div class="card"><h3>Importazione massiva</h3><p class="mut">Carica più schede in blocco: ogni foto diventa un esercizio.</p><input type="file" id="bulk" multiple accept="image/*"><p class="mut" id="prog"></p></div></div>
+<div class="grid" id="g"></div>`,
+sedute:()=>`<div class="two"><div class="card"><h3>Pianifica nuova seduta</h3><form data-f="session"><div class="row"><input type="date" name="date" value="${today()}" required><div style="flex:2 1 160px"><input name="title" placeholder="Titolo seduta" required></div></div>
+<div class="row" style="margin:10px 0"><div style="flex:2 1 140px"><input id="q" placeholder="Cerca nel database…"></div><select id="cf"><option value="">Tutte le categorie</option>${opts(CATS)}</select></div>
+<div class="pick" id="pk"></div><button class="b" id="sv" style="width:100%;margin-top:10px">Salva seduta</button></form></div>
+<div class="card" id="ar"></div></div>`};
+
+const fills={
+rosa(){$("#l").innerHTML=byName("player","name").map(p=>`<tr><td><b>${esc(p.name)}</b></td><td><span class="tag">${esc(p.position)}</span></td><td>${fd(p.birth)}</td><td style="text-align:right"><button class="x" data-act="delp" data-id="${p.id}">🗑</button></td></tr>`).join("")||`<tr><td colspan="4" class="mut">Nessun giocatore in rosa.</td></tr>`},
+presenze(){
+  $("#evl").innerHTML=byDate("event").map(e=>`<div class="item ${selEv===e.id?"on":""}" data-act="ev" data-id="${e.id}"><div><b>${fd(e.date)}</b><div class="mut">${esc(e.type)}</div></div><button class="x" data-act="dele" data-id="${e.id}">🗑</button></div>`).join("")||`<p class="mut">Nessun evento.</p>`;
+  const ev=by("event").find(e=>e.id===selEv),pl=byName("player","name");
+  if(!ev){$("#evd").innerHTML=`<p class="mut">Seleziona un evento.</p>`;return}
+  const at=ev.attendance||{},n=pl.filter(p=>(at[p.id]||"presente")==="presente").length;
+  $("#evd").innerHTML=`<h3>${esc(ev.type)} · ${fd(ev.date)} <span class="mut">— presenti ${n}/${pl.length}</span></h3>`+pl.map(p=>{const s=at[p.id]||"presente";
+    const b=(k,c,l)=>`<button class="${c} ${s===k?"on":""}" data-act="att" data-id="${p.id}" data-s="${k}">${l}</button>`;
+    return `<div class="item" style="cursor:default"><div><b>${esc(p.name)}</b><div class="mut">${esc(p.position)}</div></div><div class="seg">${b("presente","p","P")}${b("assente","a","A")}${b("infortunato","i","I")}</div></div>`}).join("")||`<p class="mut">Aggiungi prima i giocatori nella Rosa.</p>`;
+},
+esercizi(){
+  $("#prog").textContent=bulk;
+  $("#g").innerHTML=byName("drill","title").map(d=>`<div class="drill"><button class="x dl" data-act="dld" data-id="${d.id}" title="Scarica scheda">⬇</button><button class="x del" data-act="deld" data-id="${d.id}">🗑</button>${d.image?`<img src="${d.image}" alt="">`:`<img alt="" style="height:90px">`}<div class="t"><div style="display:flex;justify-content:space-between"><span class="cat">${esc(d.category)}</span><span class="mut">${d.duration?esc(d.duration)+" min":""} ${d.age?"· "+esc(d.age):""}</span></div><b>${esc(d.title)}</b><div class="mut">${esc(d.description)}</div></div></div>`).join("")||`<p class="mut">Il database è vuoto: crea un esercizio o importa delle foto.</p>`;
+},
+sedute(){
+  const q=($("#q")||{}).value||"",c=($("#cf")||{}).value||"";
+  $("#pk").innerHTML=byName("drill","title").filter(d=>(d.title+" "+d.description).toLowerCase().includes(q.toLowerCase())&&(!c||d.category===c)).map(d=>`<div class="item ${picked.includes(d.id)?"on":""}" data-act="pick" data-id="${d.id}"><b>${picked.includes(d.id)?"✓ ":""}${esc(d.title)}</b></div>`).join("")||`<p class="mut">Nessun esercizio trovato.</p>`;
+  $("#sv").disabled=!picked.length;$("#sv").textContent=`Salva seduta (${picked.length} selezionati)`;
+  const s=viewS&&by("session").find(x=>x.id===viewS);
+  if(s){$("#ar").innerHTML=`<div style="display:flex;justify-content:space-between"><div><div class="cat">${fd(s.date)}</div><h3>${esc(s.title)}</h3></div><span><button class="x" data-act="dls" data-id="${s.id}" title="Scarica PDF">⬇</button><button class="x" data-act="close">✕</button></span></div>`+s.drillIds.map((id,i)=>{const d=by("drill").find(x=>x.id===id);return d?`<div class="item" style="display:block;cursor:default"><span class="num">${i+1}</span><b>${esc(d.title)}</b>${d.image?`<img class="big" src="${d.image}" alt="">`:""}</div>`:""}).join("");return}
+  $("#ar").innerHTML=`<h3>Archivio sedute</h3>`+(byDate("session").map(x=>`<div class="item" data-act="vs" data-id="${x.id}"><div><b>${esc(x.title)}</b><div class="mut">${fd(x.date)} · ${x.drillIds.length} esercizi</div></div><button class="x" data-act="dels" data-id="${x.id}">🗑</button></div>`).join("")||`<p class="mut">Nessuna seduta salvata.</p>`);
+}};
+
+function compress(file){return new Promise(res=>{const r=new FileReader();r.onload=e=>{const im=new Image();im.onload=()=>{const M=800,k=Math.min(1,M/im.width),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",.7))};im.src=e.target.result};r.readAsDataURL(file)})}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-act]");if(!t)return;
+  const a=t.dataset.act,id=t.dataset.id;e.stopPropagation();
+  if(a==="tab"){tab=id;render();return}
+  if(a==="delp"||a==="deld"||a==="dele"||a==="dels"){
+    if(a==="dele"&&selEv===id)selEv=null;if(a==="dels"&&viewS===id)viewS=null;
+    store.del(id);return}
+  if(a==="ev"){selEv=id;fill()}
+  if(a==="att"){const ev=by("event").find(x=>x.id===selEv);if(ev)store.save(Object.assign({},ev,{attendance:Object.assign({},ev.attendance,{[id]:t.dataset.s})}))}
+  if(a==="pick"){picked=picked.includes(id)?picked.filter(x=>x!==id):picked.concat(id);fill()}
+  if(a==="vs"){viewS=id;fill()}if(a==="close"){viewS=null;fill()}
+  if(a==="dld")exportDrill(id);if(a==="dls")exportSession(id);
+  if(a==="sv"&&pend)saveFile(pend.name,pend.blob);
+  if(a==="cl"){const o=document.getElementById("ov");if(o)o.remove();$("#st").textContent=""}
+});
+document.addEventListener("input",e=>{if(e.target.id==="q"||e.target.id==="cf")fill()});
+document.addEventListener("change",async e=>{
+  if(e.target.id!=="bulk")return;
+  const fs=Array.from(e.target.files);if(!fs.length)return;
+  for(let i=0;i<fs.length;i++){
+    bulk=`Importazione ${i+1} di ${fs.length}…`;fill();
+    const img=await compress(fs[i]);
+    await store.save({id:uid(),kind:"drill",title:fs[i].name.replace(/\.[^/.]+$/,"").replace(/_/g," ").toUpperCase(),category:"Altro",description:"Esercizio importato da immagine.",image:img});
+  }
+  bulk="Importazione completata";fill();e.target.value="";
+});
+document.addEventListener("submit",async e=>{
+  const f=e.target.dataset.f;if(!f)return;e.preventDefault();
+  const v=Object.fromEntries(new FormData(e.target).entries()),id=uid();
+  if(f==="player")store.save({id,kind:"player",name:v.name.trim(),position:v.position,birth:v.birth||""});
+  if(f==="event"){const at={};by("player").forEach(p=>at[p.id]="presente");selEv=id;store.save({id,kind:"event",date:v.date,type:v.type,attendance:at})}
+  if(f==="drill"){const file=e.target.img.files[0];const image=file?await compress(file):null;
+    store.save({id,kind:"drill",title:v.title.trim(),category:v.category,description:v.description,duration:v.duration,age:v.age,image});}
+  if(f==="session"){if(!picked.length)return;store.save({id,kind:"session",title:v.title.trim(),date:v.date,drillIds:picked});picked=[]}
+  if(f!=="event")e.target.reset();
+  fill();
+});
+const loadJs=src=>new Promise((ok,ko)=>{const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
+let pend=null;
+function offer(name,blob){pend={name,blob};$("#st").innerHTML=`Pronto: ${esc(name)} <button class="b" data-act="sv" style="padding:6px 14px;margin-left:8px">Scarica</button>`}
+async function saveFile(name,blob){const st=$("#st");let d=null;try{d=await claude.use("downloads")}catch(e){}if(!d){if(/\.png$/.test(name)){const r=new FileReader();r.onload=()=>{st.innerHTML='Clic destro (o tieni premuto) sull’immagine per salvarla <button class="b" data-act="cl" style="padding:6px 14px;margin-left:8px">Chiudi</button>';let o=document.getElementById("ov");if(!o){o=document.createElement("div");o.id="ov";o.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:8;overflow:auto;padding:16px 16px 90px";document.body.appendChild(o)}o.innerHTML='<img style="width:100%;background:#fff" src="'+r.result+'">'};r.readAsDataURL(blob)}else st.textContent="Il PDF non è scaricabile in questa vista: aprilo dal browser o dal computer";return}try{await d.save({filename:name,data:blob});st.textContent="Download richiesto"}catch(e){st.textContent=(e&&e.code==="declined")?"Download annullato":"Download non riuscito ("+((e&&e.code)||"errore")+")"}}
+function stage(html){const w=document.createElement("div");w.style.cssText="position:fixed;left:-99999px;top:0;width:794px;background:#fff;color:#1e293b;font-family:sans-serif;padding:24px";w.innerHTML=html;document.body.appendChild(w);return w}
+const tag=t=>`<span style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:3px 9px;font-size:12px;font-weight:700;text-transform:uppercase;margin-right:6px">${t}</span>`;
+async function exportDrill(id){
+  const d=by("drill").find(x=>x.id===id);if(!d)return;
+  const st=$("#st"),prev=st.textContent;st.textContent="Preparo la scheda…";
+  const w=stage(`<h1 style="font-size:32px;margin:0 0 16px;text-transform:uppercase;font-weight:400">${esc(d.title)}</h1><div style="background:#f5f5f5;padding:14px 18px;margin-bottom:20px;font-size:14px"><b style="color:#f97316;font-size:24px">${esc(d.duration||"15")}</b> min &nbsp;·&nbsp; ${esc(d.age||"Prima squadra")} &nbsp;·&nbsp; ${esc(d.category)}</div><div style="display:flex;gap:24px"><div style="flex:1"><h3 style="color:#f97316;margin:0 0 10px">Esecuzione e istruzioni</h3><p style="white-space:pre-wrap;color:#555;line-height:1.6;margin:0">${esc(d.description||"Nessuna descrizione.")}</p></div>${d.image?`<div style="flex:1.2"><img src="${d.image}" style="width:100%;max-height:480px;object-fit:contain"></div>`:""}</div>`);
+  try{await loadJs("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    const c=await html2canvas(w,{backgroundColor:"#fff",scale:2});
+    const blob=await new Promise(r=>c.toBlob(r,"image/png"));
+    offer("Esercizio_"+d.title.replace(/\s+/g,"_")+".png",blob);
+  }catch(e){st.textContent="Creazione scheda non riuscita: "+((e&&e.message)||e)}
+  w.remove();
+}
+async function exportSession(id){
+  const s=by("session").find(x=>x.id===id);if(!s)return;
+  const st=$("#st"),prev=st.textContent;st.textContent="Preparo il PDF…";
+  const rows=s.drillIds.map((did,i)=>{const d=by("drill").find(x=>x.id===did);if(!d)return"";const imp=d.description==="Esercizio importato da immagine.";
+    return `<div style="page-break-inside:avoid;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid #e2e8f0"><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><div style="width:34px;height:34px;border-radius:50%;background:#22c55e;color:#fff;text-align:center;line-height:34px;font-weight:700">${i+1}</div><h3 style="margin:0;font-size:20px;text-transform:uppercase">${esc(d.title)}</h3></div>${imp?"":`<div style="margin-bottom:8px">${tag(esc(d.category))}${d.duration?tag(esc(d.duration)+" min"):""}${d.age?tag(esc(d.age)):""}</div><p style="white-space:pre-wrap;color:#475569;line-height:1.5;margin:0 0 10px">${esc(d.description)}</p>`}${d.image?`<div style="text-align:center"><img src="${d.image}" style="max-width:100%;max-height:380px;object-fit:contain"></div>`:""}</div>`}).join("");
+  const w=stage(`<div style="border-bottom:4px solid #22c55e;padding-bottom:16px;margin-bottom:28px"><h1 style="margin:0 0 6px;font-size:30px;text-transform:uppercase">${esc(s.title)}</h1><div style="color:#64748b">Data: ${fd(s.date)} · ${s.drillIds.length} esercizi</div></div>${rows}`);
+  try{const dl=window.claude?await window.claude.use("downloads").catch(()=>null):null;if(!dl){await loadJs("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");const c=await html2canvas(w,{backgroundColor:"#fff",scale:1.5});const pb=await new Promise(r=>c.toBlob(r,"image/png"));w.remove();await saveFile("Seduta.png",pb);return}
+    await loadJs("https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js");
+    const blob=await html2pdf().set({margin:[10,8,10,8],image:{type:"jpeg",quality:.95},html2canvas:{scale:2,backgroundColor:"#fff",windowWidth:794},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},pagebreak:{mode:["css","legacy"]}}).from(w).outputPdf("blob");
+    offer("Seduta_"+s.title.replace(/\s+/g,"_")+"_"+s.date+".pdf",blob);
+  }catch(e){st.textContent="Creazione PDF non riuscita: "+((e&&e.message)||e)}
+  w.remove();
+}
+init();
+</script></body></html>
