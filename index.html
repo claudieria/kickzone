@@ -4,239 +4,174 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kick Zone Coach</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- html2canvas e html2pdf per l'esportazione -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-    </style>
 </head>
-<body class="bg-slate-950 text-slate-200 h-screen overflow-hidden selection:bg-green-500/30">
-    <div id="root" class="h-full"></div>
+<body class="bg-slate-950 text-slate-200">
+    <div id="root"></div>
 
-    <!-- React & Babel CDN -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- Firebase SDKs -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // --- DATABASE LOCALE OFFLINE (Nessun errore Firebase, nessun blocco) ---
+        const appId = 'kick-zone-coach-local';
+        const auth = { currentUser: { uid: 'local-coach-user' } };
+        const signInAnonymously = async () => ({ user: { uid: 'local-coach-user' } });
 
-        window.firebaseModules = {
-            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
-            getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection
+        const getLocalData = (path) => {
+            const data = localStorage.getItem(appId + '_' + path);
+            return data ? JSON.parse(data) : {};
         };
-        window.dispatchEvent(new Event('firebase-loaded'));
+        const setLocalData = (path, data) => {
+            localStorage.setItem(appId + '_' + path, JSON.stringify(data));
+        };
+
+        const listeners = {};
+        const notifyListeners = (collectionPath) => {
+            if (listeners[collectionPath]) {
+                const data = getLocalData(collectionPath);
+                const snapshot = {
+                    docs: Object.values(data).map(item => ({ id: item.id, data: () => item }))
+                };
+                listeners[collectionPath].forEach(callback => callback(snapshot));
+            }
+        };
+
+        const db = {};
+        const collection = (db, ...pathSegments) => ({ path: pathSegments.join('/') });
+        const doc = (db, ...pathSegments) => ({ path: pathSegments.join('/') });
+
+        const setDoc = async (docRef, data) => {
+            const pathParts = docRef.path.split('/');
+            const id = pathParts.pop();
+            const collectionPath = pathParts.join('/');
+            const collectionData = getLocalData(collectionPath);
+            collectionData[id] = data;
+            setLocalData(collectionPath, collectionData);
+            notifyListeners(collectionPath);
+        };
+
+        const deleteDoc = async (docRef) => {
+            const pathParts = docRef.path.split('/');
+            const id = pathParts.pop();
+            const collectionPath = pathParts.join('/');
+            const collectionData = getLocalData(collectionPath);
+            delete collectionData[id];
+            setLocalData(collectionPath, collectionData);
+            notifyListeners(collectionPath);
+        };
+
+        const onSnapshot = (collectionRef, callback) => {
+            const path = collectionRef.path;
+            if (!listeners[path]) listeners[path] = [];
+            listeners[path].push(callback);
+            
+            const data = getLocalData(path);
+            const snapshot = {
+                docs: Object.values(data).map(item => ({ id: item.id, data: () => item }))
+            };
+            callback(snapshot);
+
+            return () => {
+                listeners[path] = listeners[path].filter(cb => cb !== callback);
+            };
+        };
+
+        window.firebaseDependencies = { auth, db, signInAnonymously, doc, setDoc, deleteDoc, onSnapshot, collection, appId };
     </script>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        const fbConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : '{"apiKey":"dummy","projectId":"dummy"}';
-        const firebaseConfig = JSON.parse(fbConfigStr);
-        
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'team-manager-app';
+        // --- ICONE SVG SICURE (Non causano crash) ---
+        const IconUsers = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+        const IconCalendarCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/></svg>;
+        const IconDumbbell = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m14.5 17.5-6-6"/><path d="m9.5 22.5-6-6"/><path d="m22.5 9.5-6-6"/><path d="m18 10-6-6"/><path d="m10 18-6-6"/><path d="m13.5 13.5-6-6"/><path d="m18.5 8.5-6-6"/></svg>;
+        const IconClipboardList = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>;
+        const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+        const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>;
+        const IconCheckCircle = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+        const IconXCircle = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
+        const IconActivity = () => <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
+        const IconDownload = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+        const IconSearch = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+        const IconUpload = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+        const IconImage = () => <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
+        const IconCloud = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>;
 
         function App() {
-            const [activeTab, setActiveTab] = useState('rosa');
+            const [activeTab, setActiveTab] = useState('rosa'); 
             const [user, setUser] = useState(null);
-            const [dbInstance, setDbInstance] = useState(null);
-            const [customUid, setCustomUid] = useState('');
-            const [showSyncModal, setShowSyncModal] = useState(false);
-            const [syncInput, setSyncInput] = useState('');
-
             const [players, setPlayers] = useState([]);
             const [events, setEvents] = useState([]);
             const [drills, setDrills] = useState([]);
             const [sessions, setSessions] = useState([]);
 
             useEffect(() => {
-                const initFirebaseAndAuth = async () => {
-                    const checkModules = () => {
-                        if (window.firebaseModules) {
-                            setupApp(window.firebaseModules);
-                        } else {
-                            window.addEventListener('firebase-loaded', () => setupApp(window.firebaseModules), { once: true });
-                            // Fallback se l'evento è già scattato
-                            setTimeout(() => {
-                                if (window.firebaseModules && !dbInstance) {
-                                    setupApp(window.firebaseModules);
-                                }
-                            }, 500);
-                        }
-                    };
-                    checkModules();
-                };
-
-                const setupApp = async ({ initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore }) => {
-                    try {
-                        const app = initializeApp(firebaseConfig);
-                        const auth = getAuth(app);
-                        const db = getFirestore(app);
-                        setDbInstance(db);
-
-                        const savedUid = localStorage.getItem('kick_zone_custom_uid');
-                        if (savedUid) {
-                            setCustomUid(savedUid);
-                            setUser({ uid: savedUid });
-                            return;
-                        }
-
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-
-                        onAuthStateChanged(auth, (u) => {
-                            if (!localStorage.getItem('kick_zone_custom_uid') && u) {
-                                setUser(u);
-                                setCustomUid(u.uid);
-                            }
-                        });
-                    } catch (error) {
-                        console.error("Auth error:", error);
-                        // Fallback di emergenza per sbloccare la schermata di caricamento
-                        if (!user) {
-                            const fallbackId = localStorage.getItem('kick_zone_custom_uid') || 'guest-user-' + Math.random().toString(36).substring(2, 9);
-                            setUser({ uid: fallbackId });
-                        }
+                const checkFirebase = setInterval(() => {
+                    if (window.firebaseDependencies) {
+                        clearInterval(checkFirebase);
+                        const { auth, signInAnonymously } = window.firebaseDependencies;
+                        signInAnonymously(auth).then((userCredential) => {
+                            setUser(userCredential.user);
+                        }).catch(err => console.error(err));
                     }
-                };
-
-                initFirebaseAndAuth();
+                }, 100);
             }, []);
 
             useEffect(() => {
-                if (!user || !dbInstance) return;
-                const { onSnapshot, collection } = window.firebaseModules || {};
-                if (!onSnapshot) {
-                    // Se per qualche motivo i moduli non sono pronti ma abbiamo un utente fittizio
-                    return;
-                }
+                if (!user || !window.firebaseDependencies) return;
+                const { db, onSnapshot, collection, appId } = window.firebaseDependencies;
                 const userId = user.uid;
 
-                const unsubPlayers = onSnapshot(collection(dbInstance, 'artifacts', appId, 'users', userId, 'players'), (snapshot) => {
-                    setPlayers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => a.name.localeCompare(b.name)));
-                }, (err) => console.log(err));
-
-                const unsubEvents = onSnapshot(collection(dbInstance, 'artifacts', appId, 'users', userId, 'events'), (snapshot) => {
+                const unsubPlayers = onSnapshot(collection(db, 'artifacts', appId, 'users', userId, 'players'), (snapshot) => {
+                    setPlayers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+                });
+                const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'users', userId, 'events'), (snapshot) => {
                     setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)));
-                }, (err) => console.log(err));
-
-                const unsubDrills = onSnapshot(collection(dbInstance, 'artifacts', appId, 'users', userId, 'drills'), (snapshot) => {
-                    setDrills(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => a.title.localeCompare(b.title)));
-                }, (err) => console.log(err));
-
-                const unsubSessions = onSnapshot(collection(dbInstance, 'artifacts', appId, 'users', userId, 'sessions'), (snapshot) => {
+                });
+                const unsubDrills = onSnapshot(collection(db, 'artifacts', appId, 'users', userId, 'drills'), (snapshot) => {
+                    // Ordina dal più recente al più vecchio (in base a createdAt o all'ID se createdAt manca)
+                    setDrills(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => {
+                        const timeA = a.createdAt || parseInt(a.id);
+                        const timeB = b.createdAt || parseInt(b.id);
+                        return timeB - timeA; 
+                    }));
+                });
+                const unsubSessions = onSnapshot(collection(db, 'artifacts', appId, 'users', userId, 'sessions'), (snapshot) => {
                     setSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)));
-                }, (err) => console.log(err));
+                });
 
-                return () => {
-                    if (unsubPlayers) unsubPlayers(); 
-                    if (unsubEvents) unsubEvents(); 
-                    if (unsubDrills) unsubDrills(); 
-                    if (unsubSessions) unsubSessions();
-                };
-            }, [user, dbInstance]);
-
-            useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
-            });
-
-            const handleApplySyncCode = (e) => {
-                e.preventDefault();
-                if (!syncInput.trim()) return;
-                const newUid = syncInput.trim();
-                localStorage.setItem('kick_zone_custom_uid', newUid);
-                setCustomUid(newUid);
-                setUser({ uid: newUid });
-                setShowSyncModal(false);
-                setSyncInput('');
-                window.location.reload();
-            };
-
-            const handleResetSync = () => {
-                localStorage.removeItem('kick_zone_custom_uid');
-                window.location.reload();
-            };
+                return () => { unsubPlayers(); unsubEvents(); unsubDrills(); unsubSessions(); };
+            }, [user]);
 
             return (
-                <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden">
-                    {showSyncModal && (
-                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-6">
-                                <div className="flex justify-between items-center">
-                                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                        <i data-lucide="cloud" className="w-6 h-6 text-green-500"></i> Sincronizza Dispositivo
-                                    </h3>
-                                    <button onClick={() => setShowSyncModal(false)} className="text-slate-400 hover:text-white">
-                                        <i data-lucide="x" className="w-5 h-5"></i>
-                                    </button>
-                                </div>
-                                <p className="text-sm text-slate-400">
-                                    Il tuo codice ID attuale è: <br/>
-                                    <code className="bg-slate-950 text-green-400 px-3 py-1.5 rounded block mt-2 text-xs font-mono select-all break-all border border-slate-800">{user?.uid}</code>
-                                </p>
-                                <p className="text-sm text-slate-400">
-                                    Copia questo codice dal tuo PC e incollalo qui sotto sul tuo smartphone (o viceversa) per vedere la stessa identica rosa e gli stessi esercizi in tempo reale!
-                                </p>
-                                <form onSubmit={handleApplySyncCode} className="space-y-4">
-                                    <input 
-                                        type="text" value={syncInput} onChange={(e) => setSyncInput(e.target.value)} 
-                                        placeholder="Incolla qui il codice ID dell'altro dispositivo..." 
-                                        required
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm outline-none focus:border-green-500 font-mono"
-                                    />
-                                    <div className="flex gap-3">
-                                        <button type="button" onClick={() => setShowSyncModal(false)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-2.5 rounded-lg text-sm font-medium">Annulla</button>
-                                        <button type="submit" className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-lg text-sm font-medium">Connetti</button>
-                                    </div>
-                                </form>
-                                {localStorage.getItem('kick_zone_custom_uid') && (
-                                    <button onClick={handleResetSync} className="w-full text-red-400 hover:text-red-300 text-xs text-center pt-2">
-                                        Disconnetti e torna a un profilo casuale
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
+                <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden selection:bg-green-500/30">
                     <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-20 shadow-xl">
                         <div className="p-6 border-b border-slate-800">
                             <div className="flex items-center gap-3 text-green-500 font-bold text-xl uppercase tracking-wider">
-                                <i data-lucide="activity" className="w-7 h-7"></i>
+                                <span><IconActivity /></span>
                                 <span>Kick Zone Coach</span>
                             </div>
                         </div>
                         
                         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-                            <NavItem icon="users" label="Rosa" id="rosa" active={activeTab === 'rosa'} onClick={setActiveTab} />
-                            <NavItem icon="calendar-check" label="Presenze" id="presenze" active={activeTab === 'presenze'} onClick={setActiveTab} />
-                            <NavItem icon="dumbbell" label="Database Esercizi" id="esercizi" active={activeTab === 'esercizi'} onClick={setActiveTab} />
-                            <NavItem icon="clipboard-list" label="Sedute Allenamento" id="sedute" active={activeTab === 'sedute'} onClick={setActiveTab} />
+                            <NavItem icon={IconUsers} label="Rosa" id="rosa" active={activeTab === 'rosa'} onClick={setActiveTab} />
+                            <NavItem icon={IconCalendarCheck} label="Presenze" id="presenze" active={activeTab === 'presenze'} onClick={setActiveTab} />
+                            <NavItem icon={IconDumbbell} label="Database Esercizi" id="esercizi" active={activeTab === 'esercizi'} onClick={setActiveTab} />
+                            <NavItem icon={IconClipboardList} label="Sedute Allenamento" id="sedute" active={activeTab === 'sedute'} onClick={setActiveTab} />
                         </nav>
                         
-                        <div className="p-4 border-t border-slate-800 text-center">
-                            <button onClick={() => setShowSyncModal(true)} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2.5 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition-colors border border-slate-700/50 shadow">
-                                <i data-lucide="cloud" className="w-4 h-4 text-green-400"></i>
-                                <span>Sincronizza App</span>
-                            </button>
+                        <div className="p-4 border-t border-slate-800 text-xs text-slate-500 text-center flex flex-col items-center gap-2">
+                            <span><IconCloud /></span>
+                            <span>Database Locale (Veloce)</span>
                         </div>
                     </div>
 
                     <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-slate-950">
-                        <header className="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur flex items-center justify-between px-8 shrink-0 z-10 sticky top-0">
+                        <header className="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur flex items-center px-8 shrink-0 z-10 sticky top-0">
                             <h2 className="text-xl font-semibold capitalize text-white">
                                 {activeTab.replace('-', ' ')}
                             </h2>
@@ -247,14 +182,14 @@
                                 {!user ? (
                                     <div className="h-full flex items-center justify-center text-slate-500 flex-col gap-4">
                                         <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
-                                        Caricamento Database...
+                                        Avvio in corso...
                                     </div>
                                 ) : (
                                     <>
-                                        {activeTab === 'rosa' && <RosaView players={players} user={user} db={dbInstance} appId={appId} />}
-                                        {activeTab === 'presenze' && <PresenzeView players={players} events={events} user={user} db={dbInstance} appId={appId} />}
-                                        {activeTab === 'esercizi' && <EserciziView drills={drills} user={user} db={dbInstance} appId={appId} />}
-                                        {activeTab === 'sedute' && <SeduteView drills={drills} sessions={sessions} user={user} db={dbInstance} appId={appId} />}
+                                        {activeTab === 'rosa' && <RosaView players={players} user={user} />}
+                                        {activeTab === 'presenze' && <PresenzeView players={players} events={events} user={user} />}
+                                        {activeTab === 'esercizi' && <EserciziView drills={drills} user={user} />}
+                                        {activeTab === 'sedute' && <SeduteView drills={drills} sessions={sessions} user={user} />}
                                     </>
                                 )}
                             </div>
@@ -264,81 +199,62 @@
             );
         }
 
-        function NavItem({ icon, label, id, active, onClick }) {
+        function NavItem({ icon: Icon, label, id, active, onClick }) {
             return (
                 <button
                     onClick={() => onClick(id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                        active 
-                            ? 'bg-green-500/10 text-green-400 border border-green-500/30' 
-                            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-transparent'
+                        active ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'text-slate-400 hover:bg-slate-800 border border-transparent'
                     }`}
                 >
-                    <i data-lucide={icon} className="w-5 h-5"></i>
+                    <span><Icon /></span>
                     <span className="font-medium">{label}</span>
                 </button>
             );
         }
 
-        function RosaView({ players, user, db, appId }) {
+        // --- VISTA ROSA ---
+        function RosaView({ players, user }) {
             const [name, setName] = useState('');
             const [position, setPosition] = useState('Centrocampista');
             const [birthDate, setBirthDate] = useState('');
 
             const handleAdd = async (e) => {
                 e.preventDefault();
-                if (!name.trim() || !user || !db) return;
-                const { doc, setDoc } = window.firebaseModules || {};
-                const newPlayer = { id: Date.now().toString(), name, position, birthDate: birthDate || '' };
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', newPlayer.id), newPlayer);
-                    setName(''); setBirthDate('');
-                } catch (err) { console.error(err); }
+                if (!name.trim()) return;
+                const { db, setDoc, doc, appId } = window.firebaseDependencies;
+                const newPlayer = { id: Date.now().toString(), name, position, birthDate, createdAt: Date.now() };
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', newPlayer.id), newPlayer);
+                setName(''); setBirthDate('');
             };
 
             const handleDelete = async (id) => {
-                if (!db) return;
-                const { doc, deleteDoc } = window.firebaseModules || {};
-                try { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', id)); } 
-                catch (err) { console.error(err); }
+                const { db, deleteDoc, doc, appId } = window.firebaseDependencies;
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', id));
             };
 
             return (
                 <div className="space-y-8">
                     <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg">
                         <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
-                            <i data-lucide="plus" className="w-5 h-5 text-green-500"></i> Aggiungi Giocatore
+                            <span><IconPlus /></span> Aggiungi Giocatore
                         </h3>
                         <form onSubmit={handleAdd} className="flex flex-wrap gap-4 items-end">
                             <div className="flex-1 min-w-[200px]">
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Nome e Cognome</label>
-                                <input 
-                                    type="text" value={name} onChange={(e) => setName(e.target.value)} required
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none"
-                                />
+                                <label className="block text-xs text-slate-400 mb-1">Nome e Cognome</label>
+                                <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white" />
                             </div>
                             <div className="w-48">
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Ruolo</label>
-                                <select 
-                                    value={position} onChange={(e) => setPosition(e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none"
-                                >
-                                    <option>Portiere</option>
-                                    <option>Difensore</option>
-                                    <option>Centrocampista</option>
-                                    <option>Attaccante</option>
+                                <label className="block text-xs text-slate-400 mb-1">Ruolo</label>
+                                <select value={position} onChange={(e) => setPosition(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white">
+                                    <option>Portiere</option><option>Difensore</option><option>Centrocampista</option><option>Attaccante</option>
                                 </select>
                             </div>
                             <div className="w-44">
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Data di Nascita</label>
-                                <input 
-                                    type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none"
-                                />
+                                <label className="block text-xs text-slate-400 mb-1">Data di Nascita</label>
+                                <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white" />
                             </div>
-                            <button type="submit" className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">
-                                Salva
-                            </button>
+                            <button type="submit" className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-medium">Salva</button>
                         </form>
                     </div>
 
@@ -348,7 +264,7 @@
                                 <tr>
                                     <th className="px-6 py-4">Nome</th>
                                     <th className="px-6 py-4">Ruolo</th>
-                                    <th className="px-6 py-4">Data di Nascita</th>
+                                    <th className="px-6 py-4">Data Nascita</th>
                                     <th className="px-6 py-4 text-right">Azioni</th>
                                 </tr>
                             </thead>
@@ -360,13 +276,9 @@
                                     <tr key={p.id} className="hover:bg-slate-800/20">
                                         <td className="px-6 py-4 text-white font-medium">{p.name}</td>
                                         <td className="px-6 py-4"><span className="bg-slate-800 px-2 py-1 rounded text-xs">{p.position}</span></td>
-                                        <td className="px-6 py-4 text-slate-300 font-medium">
-                                            {p.birthDate ? new Date(p.birthDate).toLocaleDateString('it-IT') : '-'}
-                                        </td>
+                                        <td className="px-6 py-4 text-slate-300 font-medium">{p.birthDate ? new Date(p.birthDate).toLocaleDateString('it-IT') : '-'}</td>
                                         <td className="px-6 py-4 text-right">
-                                            <button onClick={() => handleDelete(p.id)} className="text-slate-500 hover:text-red-500 p-2">
-                                                <i data-lucide="trash-2" className="w-4 h-4"></i>
-                                            </button>
+                                            <button onClick={() => handleDelete(p.id)} className="text-slate-500 hover:text-red-500 p-2"><span><IconTrash /></span></button>
                                         </td>
                                     </tr>
                                 ))}
@@ -377,42 +289,34 @@
             );
         }
 
-        function PresenzeView({ players, events, user, db, appId }) {
+        // --- VISTA PRESENZE ---
+        function PresenzeView({ players, events, user }) {
             const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
             const [type, setType] = useState('Allenamento');
             const [selectedEventId, setSelectedEventId] = useState(null);
 
             const handleCreateEvent = async (e) => {
                 e.preventDefault();
-                if (!user || !db) return;
-                const { doc, setDoc } = window.firebaseModules || {};
+                const { db, setDoc, doc, appId } = window.firebaseDependencies;
                 const initialAttendance = {};
                 players.forEach(p => { initialAttendance[p.id] = 'presente'; });
                 const newEvent = { id: Date.now().toString(), date, type, attendance: initialAttendance };
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', newEvent.id), newEvent);
-                    setSelectedEventId(newEvent.id);
-                } catch (err) { console.error(err); }
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', newEvent.id), newEvent);
+                setSelectedEventId(newEvent.id);
             };
 
             const updateAttendance = async (eventId, playerId, status) => {
-                if (!user || !db) return;
-                const { doc, setDoc } = window.firebaseModules || {};
+                const { db, setDoc, doc, appId } = window.firebaseDependencies;
                 const eventToUpdate = events.find(ev => ev.id === eventId);
                 if (!eventToUpdate) return;
                 const updatedEvent = { ...eventToUpdate, attendance: { ...eventToUpdate.attendance, [playerId]: status } };
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', eventId), updatedEvent);
-                } catch (err) { console.error(err); }
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', eventId), updatedEvent);
             };
 
             const handleDeleteEvent = async (id) => {
-                if (!db) return;
-                const { doc, deleteDoc } = window.firebaseModules || {};
-                try {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', id));
-                    if (selectedEventId === id) setSelectedEventId(null);
-                } catch (err) { console.error(err); }
+                const { db, deleteDoc, doc, appId } = window.firebaseDependencies;
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', id));
+                if (selectedEventId === id) setSelectedEventId(null);
             };
 
             const selectedEvent = events.find(e => e.id === selectedEventId);
@@ -423,15 +327,13 @@
                         <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-lg shrink-0">
                             <h3 className="font-medium text-white mb-4">Nuovo Evento</h3>
                             <form onSubmit={handleCreateEvent} className="space-y-3">
-                                <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none" />
-                                <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none">
-                                    <option>Allenamento</option>
-                                    <option>Partita</option>
+                                <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 outline-none text-white" />
+                                <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 outline-none text-white">
+                                    <option>Allenamento</option><option>Partita</option>
                                 </select>
                                 <button type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg">Crea Registro</button>
                             </form>
                         </div>
-
                         <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 overflow-y-auto">
                             {events.map(ev => (
                                 <div key={ev.id} onClick={() => setSelectedEventId(ev.id)} className={`p-4 cursor-pointer border-b border-slate-800/50 flex justify-between items-center group ${selectedEventId === ev.id ? 'bg-green-500/10 border-l-2 border-l-green-500' : 'hover:bg-slate-800/50'}`}>
@@ -439,12 +341,11 @@
                                         <div className="font-medium text-white">{new Date(ev.date).toLocaleDateString('it-IT')}</div>
                                         <div className="text-xs text-slate-500">{ev.type}</div>
                                     </div>
-                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteEvent(ev.id); }} className="text-red-500 opacity-0 group-hover:opacity-100 p-2"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteEvent(ev.id); }} className="text-red-500 opacity-0 group-hover:opacity-100 p-2"><span><IconTrash /></span></button>
                                 </div>
                             ))}
                         </div>
                     </div>
-
                     <div className="w-2/3 bg-slate-900 rounded-xl border border-slate-800 flex flex-col shadow-lg overflow-hidden">
                         {selectedEvent ? (
                             <>
@@ -452,25 +353,23 @@
                                     <h2 className="text-xl font-bold text-white">{selectedEvent.type} - {new Date(selectedEvent.date).toLocaleDateString('it-IT')}</h2>
                                     <div className="text-sm">Presenti: <span className="text-green-500 font-bold">{Object.values(selectedEvent.attendance || {}).filter(s => s === 'presente').length}</span>/{players.length}</div>
                                 </div>
-                                <div className="flex-1 overflow-y-auto p-4">
-                                    <div className="space-y-2">
-                                        {players.map(p => {
-                                            const status = (selectedEvent.attendance && selectedEvent.attendance[p.id]) || 'presente';
-                                            return (
-                                                <div key={p.id} className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800">
-                                                    <div>
-                                                        <div className="font-medium text-white">{p.name}</div>
-                                                        <div className="text-xs text-slate-500">{p.position}</div>
-                                                    </div>
-                                                    <div className="flex gap-1 bg-slate-900 p-1 rounded-lg">
-                                                        <button onClick={() => updateAttendance(selectedEvent.id, p.id, 'presente')} className={`px-3 py-1 rounded text-xs font-bold ${status === 'presente' ? 'bg-green-600 text-white' : 'text-slate-500 hover:text-white'}`}>P</button>
-                                                        <button onClick={() => updateAttendance(selectedEvent.id, p.id, 'assente')} className={`px-3 py-1 rounded text-xs font-bold ${status === 'assente' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-white'}`}>A</button>
-                                                        <button onClick={() => updateAttendance(selectedEvent.id, p.id, 'infortunato')} className={`px-3 py-1 rounded text-xs font-bold ${status === 'infortunato' ? 'bg-orange-500 text-white' : 'text-slate-500 hover:text-white'}`}>I</button>
-                                                    </div>
+                                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                                    {players.map(p => {
+                                        const status = (selectedEvent.attendance && selectedEvent.attendance[p.id]) || 'presente';
+                                        return (
+                                            <div key={p.id} className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                                <div>
+                                                    <div className="font-medium text-white">{p.name}</div>
+                                                    <div className="text-xs text-slate-500">{p.position}</div>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                                <div className="flex gap-1 bg-slate-900 p-1 rounded-lg">
+                                                    <button onClick={() => updateAttendance(selectedEvent.id, p.id, 'presente')} className={`px-3 py-1 rounded text-xs font-bold ${status === 'presente' ? 'bg-green-600 text-white' : 'text-slate-500'}`}>P</button>
+                                                    <button onClick={() => updateAttendance(selectedEvent.id, p.id, 'assente')} className={`px-3 py-1 rounded text-xs font-bold ${status === 'assente' ? 'bg-red-600 text-white' : 'text-slate-500'}`}>A</button>
+                                                    <button onClick={() => updateAttendance(selectedEvent.id, p.id, 'infortunato')} className={`px-3 py-1 rounded text-xs font-bold ${status === 'infortunato' ? 'bg-orange-500 text-white' : 'text-slate-500'}`}>I</button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </>
                         ) : (
@@ -481,15 +380,23 @@
             );
         }
 
-        function EserciziView({ drills, user, db, appId }) {
+        // --- VISTA ESERCIZI ---
+        function EserciziView({ drills, user }) {
+            const [isUploading, setIsUploading] = useState(false);
+            const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+
+            // Filtri Ricerca
+            const [searchFilter, setSearchFilter] = useState('');
+            const [categoryFilter, setCategoryFilter] = useState('');
+
+            // Campi form manuale
             const [title, setTitle] = useState('');
             const [category, setCategory] = useState('Tattica');
             const [description, setDescription] = useState('');
             const [image, setImage] = useState(null);
             const [duration, setDuration] = useState('');
             const [age, setAge] = useState('');
-            const [isUploading, setIsUploading] = useState(false);
-            const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+
             const [exportDrillData, setExportDrillData] = useState(null);
 
             const compressAndExtractBase64 = (file) => {
@@ -499,14 +406,14 @@
                         const img = new Image();
                         img.onload = () => {
                             const canvas = document.createElement('canvas');
-                            const MAX_WIDTH = 1000; 
+                            const MAX_WIDTH = 600; 
                             let width = img.width;
                             let height = img.height;
                             if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
                             canvas.width = width; canvas.height = height;
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, width, height);
-                            resolve(canvas.toDataURL('image/jpeg', 0.8));
+                            resolve(canvas.toDataURL('image/jpeg', 0.6));
                         };
                         img.src = e.target.result;
                     };
@@ -516,10 +423,11 @@
 
             const handleBulkUpload = async (e) => {
                 const files = Array.from(e.target.files);
-                if (!files.length || !user || !db) return;
+                if (!files.length) return;
+                
                 setIsUploading(true);
                 setUploadProgress({ current: 0, total: files.length });
-                const { doc, setDoc } = window.firebaseModules || {};
+                const { db, setDoc, doc, appId } = window.firebaseDependencies;
 
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
@@ -527,14 +435,16 @@
                         let titleFromName = file.name.replace(/\.[^/.]+$/, "").replace(/[_]/g, " ").toUpperCase();
                         const compressedImage = await compressAndExtractBase64(file);
                         const newDrill = { 
-                            id: Date.now().toString() + i, 
+                            id: Date.now().toString() + "_" + i, 
                             title: titleFromName, 
                             category: 'Altro', 
-                            description: 'Esercizio importato da immagine.', 
-                            image: compressedImage 
+                            description: 'Esercizio importato.', 
+                            image: compressedImage,
+                            createdAt: Date.now() + i 
                         };
                         await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'drills', newDrill.id), newDrill);
                         setUploadProgress({ current: i + 1, total: files.length });
+                        await new Promise(r => setTimeout(r, 40)); 
                     } catch (err) { console.error(err); }
                 }
                 setIsUploading(false);
@@ -542,25 +452,22 @@
             };
 
             const handleDelete = async (id) => {
-                if (!db) return;
-                const { doc, deleteDoc } = window.firebaseModules || {};
-                try { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'drills', id)); } 
-                catch (err) { console.error(err); }
+                const { db, deleteDoc, doc, appId } = window.firebaseDependencies;
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'drills', id));
             };
 
-            const downloadDrill = async (drill) => {
+            const downloadDrill = (drill) => {
                 setExportDrillData(drill);
-                setTimeout(async () => {
+                setTimeout(() => {
                     const element = document.getElementById('export-template');
                     if (!element) return;
-                    try {
-                        const canvas = await window.html2canvas(element, { backgroundColor: '#ffffff', scale: 2 });
+                    window.html2canvas(element, { backgroundColor: '#ffffff', scale: 3 }).then(canvas => {
                         const link = document.createElement('a');
                         link.download = `Esercizio_${drill.title.replace(/\s+/g, '_')}.png`;
                         link.href = canvas.toDataURL('image/png');
                         link.click();
                         setExportDrillData(null);
-                    } catch (err) { console.error(err); setExportDrillData(null); }
+                    });
                 }, 500);
             };
 
@@ -574,60 +481,70 @@
 
             const handleAdd = async (e) => {
                 e.preventDefault();
-                if (!title.trim() || !user || !db) return;
-                const { doc, setDoc } = window.firebaseModules || {};
+                if (!title.trim()) return;
+                const { db, setDoc, doc, appId } = window.firebaseDependencies;
                 const newDrill = { 
                     id: Date.now().toString(), 
-                    title, category, description, image, duration, age
+                    title, 
+                    category, 
+                    description, 
+                    image,
+                    duration,
+                    age,
+                    createdAt: Date.now() 
                 };
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'drills', newDrill.id), newDrill);
-                    setTitle(''); setDescription(''); setImage(null); setCategory('Tattica'); setDuration(''); setAge('');
-                    const fileInput = document.getElementById('single-image-upload');
-                    if (fileInput) fileInput.value = '';
-                } catch (err) { console.error(err); }
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'drills', newDrill.id), newDrill);
+                setTitle(''); setDescription(''); setImage(null); setCategory('Tattica'); setDuration(''); setAge('');
+                const fileInput = document.getElementById('single-image-upload');
+                if (fileInput) fileInput.value = '';
             };
 
+            // Filtraggio dinamico degli esercizi
+            const filteredDrills = drills.filter(drill => {
+                const searchTxt = searchFilter.toLowerCase();
+                const matchesSearch = drill.title.toLowerCase().includes(searchTxt) || 
+                                      (drill.description && drill.description.toLowerCase().includes(searchTxt));
+                const matchesCategory = categoryFilter ? drill.category === categoryFilter : true;
+                return matchesSearch && matchesCategory;
+            });
+
             return (
-                <div className="flex flex-col gap-6 h-[calc(100vh-8rem)] relative">
+                <div className="flex flex-col gap-6 h-full relative">
+                    
+                    {/* MODELLO NASCOSTO PER DOWNLOAD ESERCIZIO (Niente margini negativi o tagli) */}
                     {exportDrillData && (
-                        <div className="absolute left-[-9999px] top-0 pointer-events-none z-[-1]">
-                            <div id="export-template" className="w-[1100px] bg-white text-slate-800 font-sans p-10 flex flex-col gap-8">
-                                <h1 className="text-4xl text-slate-700 font-normal uppercase tracking-wide">{exportDrillData.title}</h1>
-                                <div className="bg-[#f5f5f5] flex border-y border-[#eaeaea]">
-                                    <div className="p-6 min-w-[180px] border-r border-white flex flex-col justify-center">
-                                        <div className="text-orange-500 text-3xl font-normal">{exportDrillData.duration || '15'}</div>
-                                        <div className="text-sm text-slate-500 font-medium">Durata esercizio</div>
+                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', zIndex: -9999, overflow: 'visible' }}>
+                            <div id="export-template" style={{ width: '1100px', backgroundColor: 'white', color: '#1e293b', padding: '40px', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
+                                <h1 style={{ fontSize: '36px', textTransform: 'uppercase', marginBottom: '20px', fontWeight: 'bold' }}>{exportDrillData.title}</h1>
+                                <div style={{ display: 'flex', borderTop: '1px solid #eaeaea', borderBottom: '1px solid #eaeaea', backgroundColor: '#f5f5f5', marginBottom: '30px' }}>
+                                    <div style={{ padding: '20px', minWidth: '180px', borderRight: '1px solid white' }}>
+                                        <div style={{ color: '#f97316', fontSize: '30px', fontWeight: 'bold' }}>{exportDrillData.duration || '15'}'</div>
+                                        <div style={{ color: '#64748b', fontSize: '14px', fontWeight: '500' }}>Durata esercizio</div>
                                     </div>
-                                    <div className="p-6 flex-1 flex gap-16">
+                                    <div style={{ padding: '20px', display: 'flex', gap: '40px', flex: 1 }}>
                                         <div>
-                                            <div className="text-sm text-slate-500 mb-2 font-medium">Categoria di età</div>
-                                            <div className="text-base text-slate-800">{exportDrillData.age || 'Prima Squadra'}</div>
+                                            <div style={{ color: '#64748b', fontSize: '14px', marginBottom: '5px', fontWeight: '500' }}>Categoria di età</div>
+                                            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{exportDrillData.age || 'Prima Squadra'}</div>
                                         </div>
-                                        <div className="flex items-start gap-3 mt-1">
-                                            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full mt-2"></div>
-                                            <div className="text-base text-slate-800">{exportDrillData.category}</div>
+                                        <div>
+                                            <div style={{ color: '#64748b', fontSize: '14px', marginBottom: '5px', fontWeight: '500' }}>Tipo Esercizio</div>
+                                            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#f97316' }}>{exportDrillData.category || 'Altro'}</div>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex gap-10">
-                                    <div className="w-[45%]">
-                                        <div className="flex items-center gap-3 mb-6">
-                                            <div className="bg-[#444444] text-orange-500 p-2 rounded">
-                                                <i data-lucide="settings" className="w-6 h-6"></i>
-                                            </div>
-                                            <h3 className="text-orange-500 font-extrabold text-xl">Esecuzione / Organizzazione e istruzioni</h3>
-                                        </div>
-                                        <p className="text-[#555555] text-base leading-relaxed whitespace-pre-wrap font-medium">
+                                <div style={{ display: 'flex', gap: '40px' }}>
+                                    <div style={{ width: '45%' }}>
+                                        <h3 style={{ color: '#f97316', fontSize: '20px', marginBottom: '15px', fontWeight: 'bold' }}>Esecuzione / Organizzazione</h3>
+                                        <p style={{ color: '#475569', fontSize: '16px', lineHeight: '1.6', whiteSpace: 'pre-wrap', fontWeight: '500' }}>
                                             {exportDrillData.description || 'Nessuna descrizione inserita.'}
                                         </p>
                                     </div>
-                                    <div className="w-[55%]">
+                                    <div style={{ width: '55%' }}>
                                         {exportDrillData.image ? (
-                                            <img src={exportDrillData.image} alt="schema" className="w-full object-contain max-h-[500px]" />
+                                            <img src={exportDrillData.image} style={{ width: '100%', maxHeight: '500px', objectFit: 'contain' }} />
                                         ) : (
-                                            <div className="w-full h-[400px] bg-green-500/10 flex items-center justify-center border border-green-500/20">
-                                                <i data-lucide="dumbbell" className="w-16 h-16 text-green-500/30"></i>
+                                            <div style={{ width: '100%', height: '400px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
+                                                Nessuna immagine
                                             </div>
                                         )}
                                     </div>
@@ -636,102 +553,116 @@
                         </div>
                     )}
 
+                    {/* SEZIONE CREAZIONE MANUALE E IMPORTAZIONE MASSA */}
                     <div className="flex flex-col lg:flex-row gap-6 shrink-0">
                         <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg flex-1">
                             <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
-                                <i data-lucide="plus" className="w-5 h-5 text-green-500"></i> Nuovo Esercizio Manuale
+                                <span><IconPlus /></span> Nuovo Esercizio Manuale
                             </h3>
                             <form onSubmit={handleAdd} className="space-y-4">
                                 <div className="flex gap-4">
                                     <div className="flex-1">
-                                        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Titolo Esercizio" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-green-500" />
+                                        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Titolo Esercizio" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white focus:border-green-500" />
                                     </div>
                                     <div className="w-32">
-                                        <input type="text" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="Minuti (es. 15)" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-green-500" />
+                                        <input type="text" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="Minuti" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white focus:border-green-500" />
                                     </div>
                                     <div className="w-32">
-                                        <input type="text" value={age} onChange={(e) => setAge(e.target.value)} placeholder="Età (es. U15)" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-green-500" />
+                                        <input type="text" value={age} onChange={(e) => setAge(e.target.value)} placeholder="Es. U15" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white focus:border-green-500" />
                                     </div>
                                     <div className="w-48">
-                                        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-green-500">
-                                            <option>Tattica</option>
-                                            <option>Tecnica</option>
-                                            <option>Fisico</option>
-                                            <option>Partita a tema</option>
-                                            <option>Altro</option>
+                                        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white focus:border-green-500">
+                                            <option>Tattica</option><option>Tecnica</option><option>Fisico</option><option>Partita a tema</option><option>Altro</option>
                                         </select>
                                     </div>
                                 </div>
-                                <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrizione dell'esercizio..." className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-green-500 h-20 resize-none"></textarea>
+                                <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrizione dell'esercizio..." className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white focus:border-green-500 h-20 resize-none"></textarea>
                                 <div className="flex justify-between items-center">
                                     <input type="file" accept="image/*" id="single-image-upload" onChange={handleImageChange} className="text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-800 file:text-green-500 hover:file:bg-slate-700 cursor-pointer" />
-                                    <button type="submit" className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">
-                                        Salva
-                                    </button>
+                                    <button type="submit" className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">Salva Esercizio</button>
                                 </div>
                             </form>
                         </div>
 
                         <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg w-full lg:w-1/3 flex flex-col justify-center items-center text-center gap-4">
-                            <div>
-                                <h3 className="text-lg font-medium text-white flex items-center justify-center gap-2 mb-2">
-                                    <i data-lucide="upload" className="w-5 h-5 text-blue-500"></i> Importazione Massiva
-                                </h3>
-                                <p className="text-sm text-slate-400">Hai schede già pronte? Caricale tutte in blocco.</p>
+                            <div className="flex items-center gap-2 text-lg font-medium text-white">
+                                <span><IconUpload /></span> Caricamento Multiplo
                             </div>
+                            <p className="text-sm text-slate-400">Hai schede pronte? Caricale in blocco.</p>
                             <div className="relative w-full mt-2">
-                                <input 
-                                    type="file" multiple accept="image/*" onChange={handleBulkUpload} disabled={isUploading}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                                />
-                                <button disabled={isUploading} className="w-full bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-lg font-medium text-sm transition-colors shadow-lg">
-                                    {isUploading ? 'Importazione in corso...' : 'Seleziona Foto Multiple'}
+                                <input type="file" multiple accept="image/*" onChange={handleBulkUpload} disabled={isUploading} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" />
+                                <button disabled={isUploading} className="w-full bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-lg font-medium shadow-lg">
+                                    {isUploading ? 'Importazione...' : 'Seleziona Foto Multiple'}
                                 </button>
                             </div>
                         </div>
                     </div>
 
                     {isUploading && (
-                        <div className="bg-slate-900 p-6 rounded-xl border border-blue-500/50 flex flex-col items-center justify-center space-y-4 shrink-0">
-                            <div className="text-white font-medium">Caricamento schede in corso... Non chiudere la pagina!</div>
-                            <div className="w-full bg-slate-800 rounded-full h-4 max-w-xl overflow-hidden border border-slate-700">
-                                <div className="bg-blue-500 h-4 transition-all duration-300 relative" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}></div>
+                        <div className="bg-slate-900 p-6 rounded-xl border border-blue-500/50 flex flex-col items-center shrink-0">
+                            <div className="text-white font-medium mb-4">Elaborazione in corso...</div>
+                            <div className="w-full bg-slate-800 rounded-full h-4 max-w-xl overflow-hidden">
+                                <div className="bg-blue-500 h-4 transition-all duration-200" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}></div>
                             </div>
-                            <div className="text-blue-400 text-sm font-medium">{uploadProgress.current} di {uploadProgress.total} salvati</div>
+                            <div className="text-blue-400 text-sm mt-2">{uploadProgress.current} di {uploadProgress.total} elaborati</div>
                         </div>
                     )}
 
+                    {/* BARRA FILTRO E RICERCA ESERCIZI */}
+                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-wrap gap-4 items-center justify-between shadow shrink-0">
+                        <div className="flex items-center gap-2 flex-1 min-w-[250px] bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
+                            <span><IconSearch /></span>
+                            <input 
+                                type="text" 
+                                placeholder="Cerca esercizio per nome o descrizione..." 
+                                value={searchFilter} 
+                                onChange={(e) => setSearchFilter(e.target.value)}
+                                className="bg-transparent border-none outline-none w-full text-sm text-white placeholder-slate-500"
+                            />
+                        </div>
+                        <div className="w-48">
+                            <select 
+                                value={categoryFilter} 
+                                onChange={(e) => setCategoryFilter(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-300 outline-none"
+                            >
+                                <option value="">Tutte le categorie</option>
+                                <option value="Tattica">Tattica</option>
+                                <option value="Tecnica">Tecnica</option>
+                                <option value="Fisico">Fisico</option>
+                                <option value="Partita a tema">Partita a tema</option>
+                                <option value="Altro">Altro</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div className="flex-1 overflow-y-auto">
-                        {drills.length === 0 && !isUploading ? (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-500 bg-slate-900/50 rounded-xl border border-dashed border-slate-700">
-                                <i data-lucide="image" className="w-16 h-16 text-slate-600 mb-4"></i>
-                                <p>Il tuo database è vuoto.</p>
-                                <p className="text-sm">Inizia creando un esercizio o importando le foto.</p>
+                        {filteredDrills.length === 0 && !isUploading ? (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-500 border border-dashed border-slate-700 rounded-xl p-10">
+                                <span><IconImage /></span>
+                                <p className="mt-4">Nessun esercizio trovato con questi criteri.</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-8">
-                                {drills.map(drill => (
-                                    <div key={drill.id} className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-lg group relative flex flex-col h-[400px]">
-                                        <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-8">
+                                {filteredDrills.map(drill => (
+                                    <div key={drill.id} className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-lg relative group h-64 flex flex-col">
+                                        <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 z-10 transition-opacity">
                                             <button onClick={() => downloadDrill(drill)} title="Scarica Scheda" className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg shadow">
-                                                {exportDrillData?.id === drill.id ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <i data-lucide="download" className="w-4 h-4"></i>}
+                                                {exportDrillData?.id === drill.id ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <span><IconDownload /></span>}
                                             </button>
-                                            <button onClick={() => handleDelete(drill.id)} className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg shadow"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
+                                            <button onClick={() => handleDelete(drill.id)} title="Elimina" className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg shadow">
+                                                <span><IconTrash /></span>
+                                            </button>
                                         </div>
-                                        <div className="h-48 bg-slate-950 shrink-0 border-b border-slate-800 flex items-center justify-center overflow-hidden">
-                                            {drill.image ? (
-                                                <img src={drill.image} alt={drill.title} className="w-full h-full object-cover" />
-                                            ) : (
-                                                <i data-lucide="dumbbell" className="w-12 h-12 text-slate-800"></i>
-                                            )}
+                                        <div className="flex-1 bg-slate-950 flex items-center justify-center overflow-hidden border-b border-slate-800">
+                                            {drill.image ? <img src={drill.image} className="w-full h-full object-cover" /> : <span><IconDumbbell /></span>}
                                         </div>
-                                        <div className="p-4 flex flex-col flex-1">
+                                        <div className="p-3 shrink-0 bg-slate-900">
                                             <div className="flex justify-between items-center mb-1">
-                                                <span className="text-xs font-bold uppercase text-green-500 tracking-wider">{drill.category}</span>
-                                                <span className="text-xs text-slate-500">{drill.duration ? `${drill.duration} min` : ''} {drill.age ? `• ${drill.age}` : ''}</span>
+                                                <span className="text-[10px] font-bold uppercase text-green-500 tracking-wider">{drill.category || 'Altro'}</span>
+                                                <span className="text-[10px] text-slate-500">{drill.duration ? `${drill.duration}'` : ''} {drill.age ? `• ${drill.age}` : ''}</span>
                                             </div>
-                                            <h4 className="font-bold text-lg text-white mb-2 line-clamp-2 leading-tight">{drill.title}</h4>
-                                            <p className="text-sm text-slate-400 line-clamp-4">{drill.description}</p>
+                                            <h4 className="font-bold text-sm text-white truncate">{drill.title}</h4>
                                         </div>
                                     </div>
                                 ))}
@@ -742,133 +673,83 @@
             );
         }
 
-        function SeduteView({ drills, sessions, user, db, appId }) {
+        // --- VISTA SEDUTE ---
+        function SeduteView({ drills, sessions, user }) {
             const [title, setTitle] = useState('');
             const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
             const [searchTerm, setSearchTerm] = useState('');
-            const [filterCategory, setFilterCategory] = useState('');
             const [selectedDrills, setSelectedDrills] = useState([]);
-            const [sessionSearchTerm, setSessionSearchTerm] = useState('');
             const [viewingSession, setViewingSession] = useState(null);
             const [exportSessionData, setExportSessionData] = useState(null);
 
-            const filteredDrills = drills.filter(d => {
-                const matchesSearch = d.title.toLowerCase().includes(searchTerm.toLowerCase()) || d.description.toLowerCase().includes(searchTerm.toLowerCase());
-                const matchesCategory = filterCategory ? d.category === filterCategory : true;
-                return matchesSearch && matchesCategory;
-            });
+            const filteredDrills = drills.filter(d => d.title.toLowerCase().includes(searchTerm.toLowerCase()));
 
-            const filteredSessions = sessions.filter(s => {
-                return s.title.toLowerCase().includes(sessionSearchTerm.toLowerCase());
-            });
-
-            const toggleDrill = (id) => {
-                setSelectedDrills(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-            };
+            const toggleDrill = (id) => setSelectedDrills(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
             const handleSaveSession = async (e) => {
                 e.preventDefault();
-                if (!title.trim() || selectedDrills.length === 0 || !user || !db) return;
-                const { doc, setDoc } = window.firebaseModules || {};
+                if (!title.trim() || selectedDrills.length === 0) return;
+                const { db, setDoc, doc, appId } = window.firebaseDependencies;
                 const newSession = { id: Date.now().toString(), title, date, drillIds: selectedDrills };
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', newSession.id), newSession);
-                    setTitle(''); setSelectedDrills([]); setSearchTerm('');
-                } catch (err) { console.error(err); }
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', newSession.id), newSession);
+                setTitle(''); setSelectedDrills([]);
             };
 
             const handleDeleteSession = async (id) => {
-                if (!db) return;
-                const { doc, deleteDoc } = window.firebaseModules || {};
-                try {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', id));
-                    if (viewingSession?.id === id) setViewingSession(null);
-                } catch (err) { console.error(err); }
+                const { db, deleteDoc, doc, appId } = window.firebaseDependencies;
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', id));
+                if (viewingSession?.id === id) setViewingSession(null);
             };
 
+            // ESPORTAZIONE SEDUTA IN PDF (Risolto il problema del taglio a sinistra)
             const downloadSession = async (session) => {
                 setExportSessionData(session);
                 setTimeout(async () => {
                     const element = document.getElementById('export-session-template');
                     if (!element) return;
-                    try {
-                        const opt = {
-                            margin:       [0, 5, 0, 0], 
-                            filename:     `Seduta_${session.title.replace(/\s+/g, '_')}_${session.date}.pdf`,
-                            image:        { type: 'jpeg', quality: 0.98 },
-                            html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 800, scrollX: 0, scrollY: 0 },
-                            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                            pagebreak:    { mode: ['css', 'legacy'] } 
-                        };
-                        await window.html2pdf().set(opt).from(element).save();
-                        setExportSessionData(null);
-                    } catch (err) { 
-                        console.error(err); 
-                        setExportSessionData(null); 
-                    }
-                }, 800);
+                    
+                    const opt = {
+                        margin:       15, // 15 millimetri di margine su tutti i lati (Alto, Destra, Basso, Sinistra)
+                        filename:     `Seduta_${session.title.replace(/\s+/g, '_')}.pdf`,
+                        image:        { type: 'jpeg', quality: 1.0 },
+                        html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' }, // scale 2 = Qualità doppia e nitida
+                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                    };
+                    
+                    await window.html2pdf().set(opt).from(element).save();
+                    setExportSessionData(null);
+                }, 800); // 800ms di attesa per permettere alle immagini di caricarsi bene in memoria
             };
 
             return (
-                <div className="flex gap-8 h-[calc(100vh-8rem)] relative">
+                <div className="flex gap-8 h-full relative">
+                    
+                    {/* MODELLO NASCOSTO PER DOWNLOAD SEDUTA (Posizionato sicuro in alto a sinistra) */}
                     {exportSessionData && (
-                        <div style={{ position: 'absolute', top: 0, left: 0, zIndex: -10, pointerEvents: 'none' }}>
-                            <div id="export-session-template" style={{ width: '794px', backgroundColor: 'white', padding: '0 5px 0 95px', color: '#1e293b', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
-                                <div style={{ borderBottom: '4px solid #22c55e', paddingBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '40px', paddingTop: '40px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-                                    <div>
-                                        <h1 style={{ fontSize: '36px', fontWeight: 'bold', textTransform: 'uppercase', margin: '0 0 8px 0', color: '#1e293b', lineHeight: '1.2' }}>{exportSessionData.title}</h1>
-                                        <h2 style={{ fontSize: '18px', color: '#64748b', margin: 0, fontWeight: '500' }}>Data: {new Date(exportSessionData.date).toLocaleDateString('it-IT')}</h2>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }}>Totale Esercizi</div>
-                                        <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#22c55e', lineHeight: '1.1' }}>{exportSessionData.drillIds.length}</div>
-                                    </div>
+                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', zIndex: -9999, overflow: 'visible' }}>
+                            <div id="export-session-template" style={{ width: '800px', backgroundColor: 'white', padding: '10px', color: '#1e293b', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
+                                <div style={{ borderBottom: '4px solid #22c55e', paddingBottom: '20px', marginBottom: '30px' }}>
+                                    <h1 style={{ fontSize: '30px', fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>{exportSessionData.title}</h1>
+                                    <h2 style={{ fontSize: '16px', color: '#64748b', margin: '5px 0 0 0' }}>Data: {new Date(exportSessionData.date).toLocaleDateString('it-IT')}</h2>
                                 </div>
-                                <div style={{ display: 'block', width: '100%' }}>
+                                <div>
                                     {exportSessionData.drillIds.map((drillId, idx) => {
                                         const drill = drills.find(d => d.id === drillId);
                                         if (!drill) return null;
-                                        const isImported = drill.description === 'Esercizio importato da immagine.';
-
                                         return (
-                                            <div key={drillId} style={{ pageBreakInside: 'avoid', breakInside: 'avoid', display: 'block', width: '100%', marginBottom: '40px', paddingBottom: '40px', borderBottom: '1px solid #e2e8f0' }}>
-                                                {isImported ? (
-                                                    <div style={{ width: '100%' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-                                                            <div style={{ width: '40px', height: '40px', backgroundColor: '#22c55e', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 'bold', flexShrink: 0 }}>{idx + 1}</div>
-                                                            <h3 style={{ fontSize: '24px', fontWeight: '800', textTransform: 'uppercase', color: '#1e293b', margin: 0 }}>{drill.title}</h3>
-                                                        </div>
-                                                        <div style={{ textAlign: 'center', width: '100%' }}>
-                                                            {drill.image && (
-                                                                <img src={drill.image} alt={drill.title} style={{ maxWidth: '100%', maxHeight: '500px', display: 'inline-block', objectFit: 'contain', borderRadius: '8px' }} />
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div style={{ display: 'flex', width: '100%', gap: '24px' }}>
-                                                        <div style={{ flexShrink: 0 }}>
-                                                            <div style={{ width: '40px', height: '40px', backgroundColor: '#22c55e', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 'bold' }}>{idx + 1}</div>
-                                                        </div>
-                                                        <div style={{ flex: '1', minWidth: 0 }}>
-                                                            <h3 style={{ fontSize: '24px', fontWeight: '800', textTransform: 'uppercase', color: '#1e293b', margin: '0 0 12px 0', lineHeight: '1.2' }}>{drill.title}</h3>
-                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '16px', textTransform: 'uppercase' }}>
-                                                                <span style={{ backgroundColor: '#fff7ed', color: '#f97316', padding: '4px 10px', borderRadius: '4px', border: '1px solid #ffedd5' }}>{drill.category}</span>
-                                                                {drill.duration && <span style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>⏱ {drill.duration} min</span>}
-                                                                {drill.age && <span style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>👥 {drill.age}</span>}
-                                                            </div>
-                                                            <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.6', whiteSpace: 'pre-wrap', margin: 0, fontWeight: '500' }}>
-                                                                {drill.description || 'Nessuna descrizione inserita.'}
-                                                            </p>
-                                                        </div>
-                                                        <div style={{ width: '320px', flexShrink: 0, display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
-                                                            {drill.image ? (
-                                                                <img src={drill.image} alt={drill.title} style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
-                                                            ) : (
-                                                                <div style={{ width: '100%', height: '200px', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#94a3b8', fontSize: '14px' }}>
-                                                                    Nessun'immagine
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                            <div key={drillId} style={{ marginBottom: '40px', borderBottom: '1px solid #e2e8f0', paddingBottom: '30px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
+                                                    <div style={{ backgroundColor: '#22c55e', color: 'white', width: '35px', height: '35px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '16px', flexShrink: 0 }}>{idx + 1}</div>
+                                                    <h3 style={{ fontSize: '22px', margin: 0, fontWeight: 'bold' }}>{drill.title}</h3>
+                                                </div>
+                                                
+                                                {drill.description && drill.description !== 'Esercizio importato.' && (
+                                                    <p style={{ fontSize: '15px', color: '#475569', lineHeight: '1.6', marginBottom: '20px', fontWeight: '500', whiteSpace: 'pre-wrap' }}>{drill.description}</p>
+                                                )}
+                                                
+                                                {drill.image && (
+                                                    <div style={{ textAlign: 'center', width: '100%' }}>
+                                                        <img src={drill.image} style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', borderRadius: '8px' }} />
                                                     </div>
                                                 )}
                                             </div>
@@ -884,109 +765,63 @@
                             <h3 className="font-medium text-white mb-4">Pianifica Nuova Seduta</h3>
                             <form onSubmit={handleSaveSession} className="space-y-4">
                                 <div className="flex gap-4">
-                                    <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-1/3 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none" />
-                                    <input type="text" value={title} onChange={e => setTitle(e.target.value)} required placeholder="Titolo seduta (es. Rifinitura)" className="w-2/3 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none" />
+                                    <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-1/3 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 outline-none text-white" />
+                                    <input type="text" value={title} onChange={e => setTitle(e.target.value)} required placeholder="Titolo seduta (es. Rifinitura)" className="w-2/3 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 outline-none text-white" />
                                 </div>
-                                <div className="flex gap-2 p-2 bg-slate-950 rounded-lg border border-slate-800">
-                                    <div className="relative flex-1">
-                                        <i data-lucide="search" className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                                        <input 
-                                            type="text" placeholder="Cerca nel database..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="w-full bg-transparent border-none pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:ring-0"
-                                        />
-                                    </div>
-                                    <div className="relative w-1/3 border-l border-slate-800 pl-2">
-                                        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-transparent border-none py-2 text-sm text-slate-300 outline-none appearance-none cursor-pointer">
-                                            <option value="">Tutte le Categorie</option>
-                                            <option value="Tattica">Tattica</option>
-                                            <option value="Tecnica">Tecnica</option>
-                                            <option value="Fisico">Fisico</option>
-                                            <option value="Partita a tema">Partita a tema</option>
-                                            <option value="Altro">Altro</option>
-                                        </select>
-                                        <i data-lucide="filter" className="w-3 h-3 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-                                    </div>
+                                
+                                <div className="relative">
+                                    <input type="text" placeholder="Cerca esercizio..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none" />
                                 </div>
+
                                 <div className="h-64 overflow-y-auto bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-2">
                                     {filteredDrills.length === 0 && <p className="text-slate-500 text-sm text-center py-8">Nessun esercizio trovato.</p>}
                                     {filteredDrills.map(drill => (
-                                        <div 
-                                            key={drill.id} onClick={() => toggleDrill(drill.id)}
-                                            className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center gap-3 ${selectedDrills.includes(drill.id) ? 'bg-green-500/10 border-green-500/50' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
-                                        >
-                                            <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border ${selectedDrills.includes(drill.id) ? 'bg-green-500 border-green-500' : 'border-slate-600 bg-slate-800'}`}>
-                                                {selectedDrills.includes(drill.id) && <i data-lucide="check-circle" className="w-3 h-3 text-white"></i>}
-                                            </div>
-                                            <div className="flex-1 truncate">
-                                                <div className={`font-medium text-sm truncate ${selectedDrills.includes(drill.id) ? 'text-green-400' : 'text-white'}`}>{drill.title}</div>
-                                            </div>
+                                        <div key={drill.id} onClick={() => toggleDrill(drill.id)} className={`p-3 rounded-lg border cursor-pointer flex items-center gap-3 ${selectedDrills.includes(drill.id) ? 'bg-green-500/10 border-green-500' : 'bg-slate-900 border-slate-800'}`}>
+                                            <span>{selectedDrills.includes(drill.id) ? <span><IconCheckCircle /></span> : <div className="w-4 h-4 border border-slate-600 rounded"></div>}</span>
+                                            <div className="font-medium text-sm text-white truncate">{drill.title}</div>
                                         </div>
                                     ))}
                                 </div>
-                                <button type="submit" disabled={selectedDrills.length === 0} className="w-full bg-green-600 disabled:bg-slate-800 disabled:text-slate-500 text-white py-3 rounded-lg font-bold">
-                                    Salva Seduta ({selectedDrills.length} selezionati)
-                                </button>
+                                <button type="submit" disabled={selectedDrills.length === 0} className="w-full bg-green-600 disabled:bg-slate-800 text-white py-3 rounded-lg font-bold">Salva Seduta ({selectedDrills.length} Esercizi)</button>
                             </form>
                         </div>
                     </div>
 
                     <div className="w-1/2 flex flex-col h-full bg-slate-900 rounded-xl border border-slate-800 shadow-lg overflow-hidden relative">
                         {viewingSession ? (
-                            <div className="flex flex-col h-full relative p-6">
+                            <div className="flex flex-col h-full p-6 relative">
                                 <div className="absolute top-4 right-4 flex gap-2 z-10">
-                                    <button onClick={() => downloadSession(viewingSession)} title="Scarica Seduta PDF" className="text-slate-400 hover:text-white bg-slate-800 hover:bg-blue-500 rounded-full p-2 transition-colors shadow">
-                                        {exportSessionData?.id === viewingSession.id ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <i data-lucide="download" className="w-5 h-5"></i>}
+                                    <button onClick={() => downloadSession(viewingSession)} title="Scarica PDF" className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-full shadow">
+                                        {exportSessionData?.id === viewingSession.id ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <span><IconDownload /></span>}
                                     </button>
-                                    <button onClick={() => setViewingSession(null)} title="Chiudi" className="text-slate-400 hover:text-white bg-slate-800 hover:bg-red-500 rounded-full p-2 transition-colors shadow">
-                                        <i data-lucide="x-circle" className="w-5 h-5"></i>
-                                    </button>
+                                    <button onClick={() => setViewingSession(null)} className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow"><span><IconXCircle /></span></button>
                                 </div>
-                                <div className="mb-6 border-b border-slate-800 pb-4 pr-24 shrink-0">
-                                    <div className="text-green-400 font-medium text-sm mb-1">{new Date(viewingSession.date).toLocaleDateString('it-IT')}</div>
-                                    <h2 className="text-2xl font-bold text-white">{viewingSession.title}</h2>
-                                </div>
-                                <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-4">
+                                <h2 className="text-2xl font-bold text-white mb-6 pr-24">{viewingSession.title}</h2>
+                                <div className="flex-1 overflow-y-auto space-y-4">
                                     {viewingSession.drillIds.map((drillId, idx) => {
                                         const drill = drills.find(d => d.id === drillId);
                                         if (!drill) return null;
                                         return (
-                                            <div key={drillId} className="bg-slate-950 p-4 rounded-lg border border-slate-800 flex flex-col gap-3">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-6 h-6 bg-green-500/20 text-green-400 rounded flex items-center justify-center font-bold text-xs">{idx + 1}</div>
-                                                    <h4 className="font-bold text-white text-lg">{drill.title}</h4>
-                                                </div>
-                                                {drill.image && (
-                                                    <div className="rounded-lg overflow-hidden border border-slate-700 w-full"><img src={drill.image} alt={drill.title} className="w-full object-contain bg-black max-h-64" /></div>
-                                                )}
+                                            <div key={drillId} className="bg-slate-950 p-4 rounded-lg border border-slate-800">
+                                                <h4 className="font-bold text-white mb-2">{idx + 1}. {drill.title}</h4>
+                                                {drill.image && <img src={drill.image} className="w-full object-contain max-h-48" />}
                                             </div>
                                         );
                                     })}
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex flex-col h-full">
-                                <div className="p-4 border-b border-slate-800 bg-slate-900/90 shrink-0 flex flex-col gap-3">
-                                    <h3 className="font-medium text-white flex items-center gap-2"><i data-lucide="file-text" className="w-4 h-4 text-slate-400"></i> Archivio Sedute</h3>
-                                    <div className="relative">
-                                        <i data-lucide="search" className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                                        <input 
-                                            type="text" placeholder="Cerca tra le sedute salvate..." value={sessionSearchTerm} onChange={(e) => setSessionSearchTerm(e.target.value)}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-sm text-white outline-none focus:border-green-500"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                                    {filteredSessions.length === 0 && <div className="text-center text-slate-500 mt-10">Nessuna seduta trovata.</div>}
-                                    {filteredSessions.map(session => (
-                                        <div key={session.id} className="bg-slate-950 border border-slate-800 rounded-lg p-4 flex justify-between items-center group hover:border-green-500/50 transition-colors cursor-pointer" onClick={() => setViewingSession(session)}>
-                                            <div>
-                                                <h4 className="font-bold text-white mb-1 group-hover:text-green-400">{session.title}</h4>
-                                                <div className="text-xs text-slate-400 flex items-center gap-2"><i data-lucide="calendar" className="w-3 h-3"></i> {new Date(session.date).toLocaleDateString('it-IT')} • {session.drillIds.length} Esercizi</div>
-                                            </div>
-                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id); }} className="text-slate-600 hover:text-red-500 p-2 ml-4"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
+                            <div className="p-4 flex-1 overflow-y-auto space-y-3">
+                                <h3 className="font-medium text-white mb-4">Archivio Sedute</h3>
+                                {sessions.map(session => (
+                                    <div key={session.id} className="bg-slate-950 border border-slate-800 rounded-lg p-4 flex justify-between items-center cursor-pointer hover:border-slate-700" onClick={() => setViewingSession(session)}>
+                                        <div>
+                                            <h4 className="font-bold text-white">{session.title}</h4>
+                                            <div className="text-xs text-slate-400">{new Date(session.date).toLocaleDateString('it-IT')} • {session.drillIds.length} Esercizi</div>
                                         </div>
-                                    ))}
-                                </div>
+                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id); }} className="text-red-500 p-2"><span><IconTrash /></span></button>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
@@ -994,7 +829,8 @@
             );
         }
 
-        ReactDOM.render(<App />, document.getElementById('root'));
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
