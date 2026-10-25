@@ -15,28 +15,115 @@
     <div id="root"></div>
 
     <script type="module">
-        // --- DATABASE LOCALE OFFLINE ---
+        // --- DATABASE LOCALE OFFLINE POTENZIATO (INDEXED_DB) ---
+        // Sostituisce LocalStorage per garantire spazio praticamente illimitato per le immagini.
         const appId = 'kick-zone-coach-local';
-        const auth = { currentUser: { uid: 'local-coach-user' } };
-        const signInAnonymously = async () => ({ user: { uid: 'local-coach-user' } });
+        const dbName = 'KickZoneDB';
+        const storeName = 'collections';
 
-        const getLocalData = (path) => {
-            const data = localStorage.getItem(appId + '_' + path);
-            return data ? JSON.parse(data) : {};
-        };
-        const setLocalData = (path, data) => {
-            localStorage.setItem(appId + '_' + path, JSON.stringify(data));
+        // 1. Inizializza o apre il database IndexedDB
+        const initDB = () => {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(dbName, 1);
+                request.onerror = (e) => reject(e.target.error);
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(storeName)) {
+                        db.createObjectStore(storeName);
+                    }
+                };
+            });
         };
 
+        const getLocalData = async (path) => {
+            const key = appId + '_' + path;
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, 'readonly');
+                const store = tx.objectStore(storeName);
+                const request = store.get(key);
+                request.onsuccess = () => resolve(request.result || {});
+                request.onerror = () => reject(request.error);
+            });
+        };
+
+        const setLocalData = async (path, data) => {
+            const key = appId + '_' + path;
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, 'readwrite');
+                const store = tx.objectStore(storeName);
+                const request = store.put(data, key);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        };
+
+        // Estrae tutti i dati per il backup
+        const getAllData = async () => {
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, 'readonly');
+                const store = tx.objectStore(storeName);
+                const request = store.getAll();
+                const keyRequest = store.getAllKeys();
+                
+                keyRequest.onsuccess = () => {
+                    const keys = keyRequest.result;
+                    request.onsuccess = () => {
+                        const values = request.result;
+                        const result = {};
+                        for(let i = 0; i < keys.length; i++) {
+                            result[keys[i]] = values[i];
+                        }
+                        resolve(result);
+                    };
+                };
+                keyRequest.onerror = () => reject(keyRequest.error);
+            });
+        };
+
+        // Migrazione automatica da LocalStorage a IndexedDB
+        const migrateFromLocalStorage = async () => {
+            const migratedKey = 'kzc_migrated_to_idb';
+            if (localStorage.getItem(migratedKey)) return; // Già migrato
+            
+            let hasData = false;
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith(appId + '_')) {
+                    try {
+                        const data = JSON.parse(localStorage.getItem(key));
+                        const path = key.substring((appId + '_').length);
+                        await setLocalData(path, data);
+                        hasData = true;
+                    } catch (e) { console.error("Errore migrazione chiave", key, e); }
+                }
+            }
+            if (hasData) {
+                console.log("Migrazione dati da LocalStorage completata con successo!");
+            }
+            localStorage.setItem(migratedKey, 'true'); // Segna come completato
+        };
+
+        // Mocks e listeners
         const listeners = {};
-        const notifyListeners = (collectionPath) => {
-            if (listeners[collectionPath]) {
-                const data = getLocalData(collectionPath);
+        const notifyListeners = async (collectionPath) => {
+            if (listeners[collectionPath] && listeners[collectionPath].length > 0) {
+                const data = await getLocalData(collectionPath);
                 const snapshot = {
                     docs: Object.values(data).map(item => ({ id: item.id, data: () => item }))
                 };
                 listeners[collectionPath].forEach(callback => callback(snapshot));
             }
+        };
+
+        const auth = { currentUser: { uid: 'local-coach-user' } };
+        
+        const signInAnonymously = async () => {
+            await migrateFromLocalStorage(); // Migra i dati prima di avviare l'app!
+            return { user: { uid: 'local-coach-user' } };
         };
 
         const db = {};
@@ -47,20 +134,20 @@
             const pathParts = docRef.path.split('/');
             const id = pathParts.pop();
             const collectionPath = pathParts.join('/');
-            const collectionData = getLocalData(collectionPath);
+            const collectionData = await getLocalData(collectionPath);
             collectionData[id] = data;
-            setLocalData(collectionPath, collectionData);
-            notifyListeners(collectionPath);
+            await setLocalData(collectionPath, collectionData);
+            await notifyListeners(collectionPath);
         };
 
         const deleteDoc = async (docRef) => {
             const pathParts = docRef.path.split('/');
             const id = pathParts.pop();
             const collectionPath = pathParts.join('/');
-            const collectionData = getLocalData(collectionPath);
+            const collectionData = await getLocalData(collectionPath);
             delete collectionData[id];
-            setLocalData(collectionPath, collectionData);
-            notifyListeners(collectionPath);
+            await setLocalData(collectionPath, collectionData);
+            await notifyListeners(collectionPath);
         };
 
         const onSnapshot = (collectionRef, callback) => {
@@ -68,18 +155,24 @@
             if (!listeners[path]) listeners[path] = [];
             listeners[path].push(callback);
             
-            const data = getLocalData(path);
-            const snapshot = {
-                docs: Object.values(data).map(item => ({ id: item.id, data: () => item }))
-            };
-            callback(snapshot);
+            // Caricamento asincrono iniziale
+            getLocalData(path).then(data => {
+                const snapshot = {
+                    docs: Object.values(data).map(item => ({ id: item.id, data: () => item }))
+                };
+                if (listeners[path] && listeners[path].includes(callback)) {
+                    callback(snapshot);
+                }
+            });
 
             return () => {
-                listeners[path] = listeners[path].filter(cb => cb !== callback);
+                if (listeners[path]) {
+                    listeners[path] = listeners[path].filter(cb => cb !== callback);
+                }
             };
         };
 
-        window.firebaseDependencies = { auth, db, signInAnonymously, doc, setDoc, deleteDoc, onSnapshot, collection, appId };
+        window.firebaseDependencies = { auth, db, signInAnonymously, doc, setDoc, deleteDoc, onSnapshot, collection, appId, getAllData, setLocalData };
     </script>
 
     <script type="text/babel">
@@ -109,43 +202,65 @@
             const [sessions, setSessions] = useState([]);
 
             useEffect(() => {
-                if (window.firebaseDependencies) {
-                    window.firebaseDependencies.signInAnonymously().then(cred => {
-                        setUser(cred.user);
-                    });
-                }
+                const init = setInterval(() => {
+                    if (window.firebaseDependencies) {
+                        clearInterval(init);
+                        window.firebaseDependencies.signInAnonymously().then(cred => {
+                            setUser(cred.user);
+                        });
+                    }
+                }, 100);
             }, []);
 
-            const handleExport = () => {
-                const dataToExport = {};
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key.startsWith('kick-zone-coach-local_')) {
-                        dataToExport[key] = localStorage.getItem(key);
+            // FUNZIONI DI BACKUP CON INDEXED_DB E RETROCOMPATIBILITA'
+            const handleExport = async () => {
+                try {
+                    const allData = await window.firebaseDependencies.getAllData();
+                    const dataToExport = {};
+                    const appIdPrefix = window.firebaseDependencies.appId + '_';
+                    
+                    for (const key in allData) {
+                        if (key.startsWith(appIdPrefix)) {
+                            dataToExport[key] = allData[key];
+                        }
                     }
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport));
+                    const downloadAnchorNode = document.createElement('a');
+                    downloadAnchorNode.setAttribute("href", dataStr);
+                    downloadAnchorNode.setAttribute("download", "kickzone_backup_" + new Date().toISOString().split('T')[0] + ".json");
+                    document.body.appendChild(downloadAnchorNode);
+                    downloadAnchorNode.click();
+                    downloadAnchorNode.remove();
+                } catch (e) {
+                    alert("Errore durante l'esportazione: " + e.message);
                 }
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport));
-                const downloadAnchorNode = document.createElement('a');
-                downloadAnchorNode.setAttribute("href", dataStr);
-                downloadAnchorNode.setAttribute("download", "kickzone_backup_" + new Date().toISOString().split('T')[0] + ".json");
-                document.body.appendChild(downloadAnchorNode);
-                downloadAnchorNode.click();
-                downloadAnchorNode.remove();
             };
 
             const handleImport = (event) => {
                 const file = event.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = async (e) => {
                     try {
                         const importedData = JSON.parse(e.target.result);
-                        Object.keys(importedData).forEach(key => {
-                            localStorage.setItem(key, importedData[key]);
-                        });
+                        const appIdPrefix = window.firebaseDependencies.appId + '_';
+                        
+                        for (const key of Object.keys(importedData)) {
+                            if (key.startsWith(appIdPrefix)) {
+                                const path = key.substring(appIdPrefix.length);
+                                let dataToSave = importedData[key];
+                                // Retrocompatibilità con i vecchi export dove il payload era una stringa JSON
+                                if (typeof dataToSave === 'string') {
+                                    try { dataToSave = JSON.parse(dataToSave); } catch(err){}
+                                }
+                                await window.firebaseDependencies.setLocalData(path, dataToSave);
+                            }
+                        }
+                        alert("Backup importato con successo!");
                         window.location.reload();
                     } catch (error) {
-                        console.error("Errore importazione file", error);
+                        alert("Errore durante l'importazione. File non valido.");
+                        console.error(error);
                     }
                 };
                 reader.readAsText(file);
@@ -164,8 +279,8 @@
                 });
                 const unsubDrills = onSnapshot(collection(db, 'artifacts', appId, 'users', userId, 'drills'), (snapshot) => {
                     setDrills(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => {
-                        const timeA = a.createdAt || parseInt(a.id);
-                        const timeB = b.createdAt || parseInt(b.id);
+                        const timeA = a.createdAt || parseInt(a.id.split('_')[0]) || 0;
+                        const timeB = b.createdAt || parseInt(b.id.split('_')[0]) || 0;
                         return timeB - timeA; 
                     }));
                 });
@@ -194,10 +309,10 @@
                         </nav>
                         
                         <div className="p-4 border-t border-slate-800 flex flex-col gap-2 shrink-0">
-                            <button onClick={handleExport} className="w-full bg-slate-800 hover:bg-slate-700 text-white text-xs py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                            <button onClick={handleExport} className="w-full bg-slate-800 hover:bg-slate-700 text-white text-xs py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors shadow">
                                 <span><IconDownload /></span> Esporta Backup
                             </button>
-                            <label className="w-full bg-slate-800 hover:bg-slate-700 text-white text-xs py-2.5 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors">
+                            <label className="w-full bg-slate-800 hover:bg-slate-700 text-white text-xs py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors shadow cursor-pointer">
                                 <span><IconUpload /></span> Importa Backup
                                 <input type="file" accept=".json" onChange={handleImport} className="hidden" />
                             </label>
@@ -263,6 +378,7 @@
             };
 
             const handleDelete = async (id) => {
+                if(!confirm("Sicuro di voler eliminare questo giocatore?")) return;
                 const { db, deleteDoc, doc, appId } = window.firebaseDependencies;
                 await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', id));
             };
@@ -276,17 +392,17 @@
                         <form onSubmit={handleAdd} className="flex flex-wrap gap-4 items-end">
                             <div className="flex-1 min-w-[200px]">
                                 <label className="block text-xs text-slate-400 mb-1">Nome e Cognome</label>
-                                <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white" />
+                                <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white focus:border-green-500" />
                             </div>
                             <div className="w-48">
                                 <label className="block text-xs text-slate-400 mb-1">Ruolo</label>
-                                <select value={position} onChange={(e) => setPosition(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white">
+                                <select value={position} onChange={(e) => setPosition(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white focus:border-green-500">
                                     <option>Portiere</option><option>Difensore</option><option>Centrocampista</option><option>Attaccante</option>
                                 </select>
                             </div>
                             <div className="w-44">
                                 <label className="block text-xs text-slate-400 mb-1">Data di Nascita</label>
-                                <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white" />
+                                <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 outline-none text-white focus:border-green-500" />
                             </div>
                             <button type="submit" className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-medium">Salva</button>
                         </form>
@@ -348,6 +464,7 @@
             };
 
             const handleDeleteEvent = async (id) => {
+                if(!confirm("Sicuro di eliminare questo evento?")) return;
                 const { db, deleteDoc, doc, appId } = window.firebaseDependencies;
                 await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', id));
                 if (selectedEventId === id) setSelectedEventId(null);
@@ -414,16 +531,11 @@
             );
         }
 
-        // --- VISTA ESERCIZI ---
+        // --- VISTA ESERCIZI (Upload Antipanico e Filtro) ---
         function EserciziView({ drills, user }) {
-            const [isUploading, setIsUploading] = useState(false);
-            const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
-
-            // Filtri Ricerca
             const [searchFilter, setSearchFilter] = useState('');
             const [categoryFilter, setCategoryFilter] = useState('');
 
-            // Campi form manuale
             const [title, setTitle] = useState('');
             const [category, setCategory] = useState('Tattica');
             const [description, setDescription] = useState('');
@@ -431,6 +543,8 @@
             const [duration, setDuration] = useState('');
             const [age, setAge] = useState('');
 
+            const [isUploading, setIsUploading] = useState(false);
+            const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
             const [exportDrillData, setExportDrillData] = useState(null);
 
             const compressAndExtractBase64 = (file) => {
@@ -447,7 +561,12 @@
                             canvas.width = width; canvas.height = height;
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, width, height);
-                            resolve(canvas.toDataURL('image/jpeg', 0.6));
+                            const compressed = canvas.toDataURL('image/jpeg', 0.6);
+                            
+                            img.onload = null; img.src = "";
+                            canvas.width = 0; canvas.height = 0;
+                            
+                            resolve(compressed);
                         };
                         img.src = e.target.result;
                     };
@@ -456,9 +575,12 @@
             };
 
             const handleBulkUpload = async (e) => {
-                // SALVO IL RIFERIMENTO AL PULSANTE PER POTERLO SVUOTARE DOPO
-                const targetInput = e.target; 
-                const files = Array.from(targetInput.files);
+                const fileInput = e.target;
+                const files = Array.from(fileInput.files);
+                
+                // SVUOTA IMMEDIATAMENTE LA MEMORIA DEL PULSANTE
+                fileInput.value = ''; 
+                
                 if (!files.length) return;
                 
                 setIsUploading(true);
@@ -480,32 +602,19 @@
                         };
                         await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'drills', newDrill.id), newDrill);
                         setUploadProgress({ current: i + 1, total: files.length });
-                        await new Promise(r => setTimeout(r, 40)); 
+                        
+                        // Freno a mano per non intasare la RAM del browser
+                        await new Promise(r => setTimeout(r, 60)); 
                     } catch (err) { console.error(err); }
                 }
+                
                 setIsUploading(false);
-                // SVUOTA IL CAMPO: PERMETTE DI FARE ALTRI CARICAMENTI A RUOTA!
-                targetInput.value = ''; 
             };
 
             const handleDelete = async (id) => {
+                if(!confirm("Eliminare definitivamente l'esercizio?")) return;
                 const { db, deleteDoc, doc, appId } = window.firebaseDependencies;
                 await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'drills', id));
-            };
-
-            const downloadDrill = (drill) => {
-                setExportDrillData(drill);
-                setTimeout(() => {
-                    const element = document.getElementById('export-template');
-                    if (!element) return;
-                    window.html2canvas(element, { backgroundColor: '#ffffff', scale: 3 }).then(canvas => {
-                        const link = document.createElement('a');
-                        link.download = `Esercizio_${drill.title.replace(/\s+/g, '_')}.png`;
-                        link.href = canvas.toDataURL('image/png');
-                        link.click();
-                        setExportDrillData(null);
-                    });
-                }, 500);
             };
 
             const handleImageChange = async (e) => {
@@ -536,7 +645,22 @@
                 if (fileInput) fileInput.value = '';
             };
 
-            // Filtraggio dinamico degli esercizi
+            const downloadDrill = (drill) => {
+                setExportDrillData(drill);
+                setTimeout(() => {
+                    const element = document.getElementById('export-template');
+                    if (!element) return;
+                    window.html2canvas(element, { backgroundColor: '#ffffff', scale: 2 }).then(canvas => {
+                        const link = document.createElement('a');
+                        link.download = `Esercizio_${drill.title.replace(/\s+/g, '_')}.png`;
+                        link.href = canvas.toDataURL('image/png');
+                        link.click();
+                        setExportDrillData(null);
+                    });
+                }, 500);
+            };
+
+            // Filtraggio logico
             const filteredDrills = drills.filter(drill => {
                 const searchTxt = searchFilter.toLowerCase();
                 const matchesSearch = drill.title.toLowerCase().includes(searchTxt) || 
@@ -548,9 +672,8 @@
             return (
                 <div className="flex flex-col gap-6 h-full relative">
                     
-                    {/* MODELLO NASCOSTO PER DOWNLOAD ESERCIZIO */}
                     {exportDrillData && (
-                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', zIndex: -9999, overflow: 'visible' }}>
+                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', zIndex: -9999, overflow: 'visible', opacity: 0 }}>
                             <div id="export-template" style={{ width: '1100px', backgroundColor: 'white', color: '#1e293b', padding: '40px', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
                                 <h1 style={{ fontSize: '36px', textTransform: 'uppercase', marginBottom: '20px', fontWeight: 'bold' }}>{exportDrillData.title}</h1>
                                 <div style={{ display: 'flex', borderTop: '1px solid #eaeaea', borderBottom: '1px solid #eaeaea', backgroundColor: '#f5f5f5', marginBottom: '30px' }}>
@@ -626,31 +749,21 @@
                             </div>
                             <p className="text-sm text-slate-400">Hai schede pronte? Caricale in blocco.</p>
                             <div className="relative w-full mt-2">
-                                <input type="file" multiple accept="image/*" onChange={handleBulkUpload} disabled={isUploading} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" />
+                                <input id="bulk-upload-input" type="file" multiple accept="image/*" onChange={handleBulkUpload} disabled={isUploading} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10" />
                                 <button disabled={isUploading} className="w-full bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-lg font-medium shadow-lg">
-                                    {isUploading ? 'Importazione...' : 'Seleziona Foto Multiple'}
+                                    {isUploading ? 'Importazione in corso...' : 'Seleziona Foto Multiple'}
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    {isUploading && (
-                        <div className="bg-slate-900 p-6 rounded-xl border border-blue-500/50 flex flex-col items-center shrink-0">
-                            <div className="text-white font-medium mb-4">Elaborazione in corso...</div>
-                            <div className="w-full bg-slate-800 rounded-full h-4 max-w-xl overflow-hidden">
-                                <div className="bg-blue-500 h-4 transition-all duration-200" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}></div>
-                            </div>
-                            <div className="text-blue-400 text-sm mt-2">{uploadProgress.current} di {uploadProgress.total} elaborati</div>
-                        </div>
-                    )}
-
-                    {/* BARRA FILTRO E RICERCA ESERCIZI */}
+                    {/* BARRA RICERCA / FILTRO */}
                     <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-wrap gap-4 items-center justify-between shadow shrink-0">
                         <div className="flex items-center gap-2 flex-1 min-w-[250px] bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
                             <span><IconSearch /></span>
                             <input 
                                 type="text" 
-                                placeholder="Cerca esercizio per nome o descrizione..." 
+                                placeholder="Cerca esercizio per nome o testo..." 
                                 value={searchFilter} 
                                 onChange={(e) => setSearchFilter(e.target.value)}
                                 className="bg-transparent border-none outline-none w-full text-sm text-white placeholder-slate-500"
@@ -672,11 +785,21 @@
                         </div>
                     </div>
 
+                    {isUploading && (
+                        <div className="bg-slate-900 p-6 rounded-xl border border-blue-500/50 flex flex-col items-center shrink-0">
+                            <div className="text-white font-medium mb-4">Elaborazione in corso... Non chiudere!</div>
+                            <div className="w-full bg-slate-800 rounded-full h-4 max-w-xl overflow-hidden">
+                                <div className="bg-blue-500 h-4 transition-all duration-200" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}></div>
+                            </div>
+                            <div className="text-blue-400 text-sm mt-2">{uploadProgress.current} di {uploadProgress.total} elaborati</div>
+                        </div>
+                    )}
+
                     <div className="flex-1 overflow-y-auto">
                         {filteredDrills.length === 0 && !isUploading ? (
                             <div className="h-full flex flex-col items-center justify-center text-slate-500 border border-dashed border-slate-700 rounded-xl p-10">
                                 <span><IconImage /></span>
-                                <p className="mt-4">Nessun esercizio trovato con questi criteri.</p>
+                                <p className="mt-4">Nessun esercizio trovato.</p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-8">
@@ -709,7 +832,7 @@
             );
         }
 
-        // --- VISTA SEDUTE ---
+        // --- VISTA SEDUTE E PDF ---
         function SeduteView({ drills, sessions, user }) {
             const [title, setTitle] = useState('');
             const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -732,12 +855,12 @@
             };
 
             const handleDeleteSession = async (id) => {
+                if(!confirm("Sicuro di eliminare questa seduta?")) return;
                 const { db, deleteDoc, doc, appId } = window.firebaseDependencies;
                 await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', id));
                 if (viewingSession?.id === id) setViewingSession(null);
             };
 
-            // ESPORTAZIONE SEDUTA IN PDF
             const downloadSession = async (session) => {
                 setExportSessionData(session);
                 setTimeout(async () => {
@@ -745,10 +868,10 @@
                     if (!element) return;
                     
                     const opt = {
-                        margin:       15,
+                        margin:       15, // Margini sicuri in millimetri
                         filename:     `Seduta_${session.title.replace(/\s+/g, '_')}.pdf`,
                         image:        { type: 'jpeg', quality: 1.0 },
-                        html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                        html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 794 },
                         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
                     };
                     
@@ -760,11 +883,10 @@
             return (
                 <div className="flex gap-8 h-full relative">
                     
-                    {/* MODELLO NASCOSTO PER DOWNLOAD SEDUTA */}
                     {exportSessionData && (
-                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', zIndex: -9999, overflow: 'visible' }}>
-                            <div id="export-session-template" style={{ width: '800px', backgroundColor: 'white', padding: '10px', color: '#1e293b', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
-                                <div style={{ borderBottom: '4px solid #22c55e', paddingBottom: '20px', marginBottom: '30px' }}>
+                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', zIndex: -9999, overflow: 'visible', opacity: 0 }}>
+                            <div id="export-session-template" style={{ width: '794px', backgroundColor: 'white', padding: '0px', color: '#1e293b', boxSizing: 'border-box', fontFamily: 'sans-serif', margin: '0 auto' }}>
+                                <div style={{ borderBottom: '4px solid #22c55e', paddingBottom: '20px', marginBottom: '30px', pageBreakInside: 'avoid' }}>
                                     <h1 style={{ fontSize: '30px', fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>{exportSessionData.title}</h1>
                                     <h2 style={{ fontSize: '16px', color: '#64748b', margin: '5px 0 0 0' }}>Data: {new Date(exportSessionData.date).toLocaleDateString('it-IT')}</h2>
                                 </div>
@@ -806,7 +928,7 @@
                                 </div>
                                 
                                 <div className="relative">
-                                    <input type="text" placeholder="Cerca esercizio..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+                                    <input type="text" placeholder="Cerca esercizio da inserire..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none" />
                                 </div>
 
                                 <div className="h-64 overflow-y-auto bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-2">
