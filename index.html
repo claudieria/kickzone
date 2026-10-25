@@ -1,193 +1,972 @@
-<!doctype html>
-<html lang="it"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Kick Zone Coach</title>
-<style>
-:root{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--acc:#16a34a;--inp:#f8fafc;--red:#dc2626;--org:#f97316;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#020617;--card:#0f172a;--ink:#e2e8f0;--mut:#94a3b8;--line:#1e293b;--acc:#22c55e;--inp:#020617;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#020617;--card:#0f172a;--ink:#e2e8f0;--mut:#94a3b8;--line:#1e293b;--acc:#22c55e;--inp:#020617;color-scheme:dark}
-*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
-header{position:sticky;top:env(safe-area-inset-top,0px);background:var(--card);border-bottom:1px solid var(--line);padding:12px 16px;z-index:5}
-h1{margin:0 0 8px;font-size:18px;color:var(--acc);text-transform:uppercase;letter-spacing:.05em}
-nav{display:flex;gap:6px;overflow-x:auto}
-nav button{flex:none;border:1px solid transparent;background:none;color:var(--mut);padding:8px 14px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer}
-nav button.on{color:var(--acc);border-color:var(--acc);background:color-mix(in srgb,var(--acc) 12%,transparent)}
-main{max-width:1000px;margin:0 auto;padding:16px;display:grid;gap:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
-h3{margin:0 0 12px;font-size:16px}
-.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}.row>*{flex:1 1 150px}
-input,select,textarea{width:100%;background:var(--inp);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font:inherit}
-label{display:block;font-size:12px;color:var(--mut);margin-bottom:3px}
-button.b{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:10px 18px;font:inherit;font-weight:600;cursor:pointer}
-button.b:disabled{opacity:.4}button.x{background:none;border:0;color:var(--mut);cursor:pointer;font-size:16px;padding:6px}button.x:hover{color:var(--red)}
-.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}th{color:var(--mut);font-size:13px}
-.tag{background:var(--line);border-radius:5px;padding:2px 8px;font-size:12px}
-.item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;cursor:pointer;background:var(--inp)}
-.item.on{border-color:var(--acc)}.mut{color:var(--mut);font-size:13px}
-.seg{display:flex;gap:4px}.seg button{border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:6px;padding:5px 11px;font-weight:700;cursor:pointer}
-.seg .p.on{background:#16a34a;color:#fff}.seg .a.on{background:#dc2626;color:#fff}.seg .i.on{background:#f97316;color:#fff}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-.drill{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card);position:relative}
-.drill img{width:100%;height:170px;object-fit:cover;display:block;background:var(--inp)}
-.drill .t{padding:12px}.drill .del{position:absolute;top:6px;right:6px;background:var(--red);color:#fff;border-radius:8px}.drill .dl{position:absolute;top:6px;right:44px;background:#2563eb;color:#fff;border-radius:8px}
-.cat{color:var(--acc);font-size:12px;font-weight:700;text-transform:uppercase}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:760px){.two{grid-template-columns:1fr}}
-.pick{max-height:260px;overflow-y:auto}.num{display:inline-flex;width:24px;height:24px;border-radius:6px;background:color-mix(in srgb,var(--acc) 20%,transparent);color:var(--acc);align-items:center;justify-content:center;font-weight:700;font-size:12px;margin-right:8px}
-.big{width:100%;max-height:260px;object-fit:contain;background:#000;border-radius:8px;margin-top:8px}
-.note{font-size:13px;color:var(--ink);text-align:center;position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));z-index:9}#st:empty{display:none}body{padding-bottom:64px}
-</style></head><body>
-<header><h1>⚽ Kick Zone Coach</h1><nav id="nav"></nav></header>
-<main id="app"></main>
-<div class="note" id="st"></div>
-<script>
-const $=s=>document.querySelector(s);
-const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const fd=d=>d?new Date(d).toLocaleDateString("it-IT"):"-";
-const today=()=>new Date().toISOString().split("T")[0];
-const TABS=[["rosa","Rosa"],["presenze","Presenze"],["esercizi","Esercizi"],["sedute","Sedute"]];
-const CATS=["Tattica","Tecnica","Fisico","Partita a tema","Altro"];
-let items=[],tab="rosa",selEv=null,picked=[],viewS=null,bulk="",store=null;
-const by=k=>items.filter(i=>i.kind===k);
-const byName=(k,f)=>by(k).sort((a,b)=>String(a[f]).localeCompare(String(b[f])));
-const byDate=k=>by(k).sort((a,b)=>new Date(b.date)-new Date(a.date));
-const opts=a=>a.map(x=>`<option>${x}</option>`).join("");
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kick Zone Coach</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- html2canvas e html2pdf per l'esportazione -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-200 h-screen overflow-hidden selection:bg-green-500/30">
+    <div id="root" class="h-full"></div>
 
-async function init(){
-  let db=null,user=null,uid=null;
-  try{db=await claude.use("db");user=await claude.use("user");uid=user?await user.id():null}catch(e){}
-  if(db&&uid){
-    const col=db.collection("data/users/"+uid);
-    store={save:o=>col.doc(o.id).set(o).catch(e=>$("#st").textContent="Salvataggio non riuscito"),del:id=>col.doc(id).delete().catch(()=>{})};
-    col.onSnapshot(s=>{items=s.docs.map(d=>Object.assign({},d.data(),{id:d.id}));fill()},()=>{$("#st").textContent="Dati non disponibili"});
-    $("#st").textContent="Salvataggio nel cloud attivo";
-  }else{
-    try{items=JSON.parse(localStorage.getItem("kzc")||"[]")}catch(e){items=[]}
-    const persist=()=>{try{localStorage.setItem("kzc",JSON.stringify(items))}catch(e){}};
-    store={save:o=>{const i=items.findIndex(x=>x.id===o.id);i<0?items.push(o):items[i]=o;persist();fill()},del:id=>{items=items.filter(x=>x.id!==id);persist();fill()}};
-    $("#st").textContent="Dati salvati solo su questo dispositivo";
-  }
-  render();
-}
+    <!-- React & Babel CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-function render(){
-  $("#nav").innerHTML=TABS.map(([id,l])=>`<button data-act="tab" data-id="${id}" class="${tab===id?"on":""}">${l}</button>`).join("");
-  $("#app").innerHTML=shell[tab]();fill();
-}
-function fill(){const f=fills[tab];if(f)f()}
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-const shell={
-rosa:()=>`<form class="card" data-f="player"><h3>Aggiungi giocatore</h3><div class="row">
-<div style="flex:2 1 200px"><label>Nome e cognome</label><input name="name" required></div>
-<div><label>Ruolo</label><select name="position">${opts(["Portiere","Difensore","Centrocampista","Attaccante"])}</select></div>
-<div><label>Data di nascita</label><input type="date" name="birth"></div>
-<div style="flex:0 0 auto"><button class="b">Salva</button></div></div></form>
-<div class="card scroll"><table><thead><tr><th>Nome</th><th>Ruolo</th><th>Nascita</th><th></th></tr></thead><tbody id="l"></tbody></table></div>`,
-presenze:()=>`<div class="two"><div><form class="card" data-f="event"><h3>Nuovo evento</h3><div class="row"><input type="date" name="date" value="${today()}" required><select name="type">${opts(["Allenamento","Partita"])}</select><button class="b" style="flex:0 0 auto">Crea registro</button></div></form><div id="evl" style="margin-top:16px"></div></div><div class="card" id="evd"></div></div>`,
-esercizi:()=>`<div class="two"><form class="card" data-f="drill"><h3>Nuovo esercizio</h3>
-<div class="row"><div style="flex:2 1 160px"><input name="title" placeholder="Titolo" required></div><input name="duration" placeholder="Minuti"><input name="age" placeholder="Età (es. U15)"><select name="category">${opts(CATS)}</select></div>
-<textarea name="description" rows="3" placeholder="Descrizione dell’esercizio…" style="margin:10px 0"></textarea>
-<div class="row"><input type="file" name="img" accept="image/*"><button class="b" style="flex:0 0 auto">Salva</button></div></form>
-<div class="card"><h3>Importazione massiva</h3><p class="mut">Carica più schede in blocco: ogni foto diventa un esercizio.</p><input type="file" id="bulk" multiple accept="image/*"><p class="mut" id="prog"></p></div></div>
-<div class="grid" id="g"></div>`,
-sedute:()=>`<div class="two"><div class="card"><h3>Pianifica nuova seduta</h3><form data-f="session"><div class="row"><input type="date" name="date" value="${today()}" required><div style="flex:2 1 160px"><input name="title" placeholder="Titolo seduta" required></div></div>
-<div class="row" style="margin:10px 0"><div style="flex:2 1 140px"><input id="q" placeholder="Cerca nel database…"></div><select id="cf"><option value="">Tutte le categorie</option>${opts(CATS)}</select></div>
-<div class="pick" id="pk"></div><button class="b" id="sv" style="width:100%;margin-top:10px">Salva seduta</button></form></div>
-<div class="card" id="ar"></div></div>`};
+        window.firebaseModules = {
+            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
+            getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection
+        };
+    </script>
 
-const fills={
-rosa(){$("#l").innerHTML=byName("player","name").map(p=>`<tr><td><b>${esc(p.name)}</b></td><td><span class="tag">${esc(p.position)}</span></td><td>${fd(p.birth)}</td><td style="text-align:right"><button class="x" data-act="delp" data-id="${p.id}">🗑</button></td></tr>`).join("")||`<tr><td colspan="4" class="mut">Nessun giocatore in rosa.</td></tr>`},
-presenze(){
-  $("#evl").innerHTML=byDate("event").map(e=>`<div class="item ${selEv===e.id?"on":""}" data-act="ev" data-id="${e.id}"><div><b>${fd(e.date)}</b><div class="mut">${esc(e.type)}</div></div><button class="x" data-act="dele" data-id="${e.id}">🗑</button></div>`).join("")||`<p class="mut">Nessun evento.</p>`;
-  const ev=by("event").find(e=>e.id===selEv),pl=byName("player","name");
-  if(!ev){$("#evd").innerHTML=`<p class="mut">Seleziona un evento.</p>`;return}
-  const at=ev.attendance||{},n=pl.filter(p=>(at[p.id]||"presente")==="presente").length;
-  $("#evd").innerHTML=`<h3>${esc(ev.type)} · ${fd(ev.date)} <span class="mut">— presenti ${n}/${pl.length}</span></h3>`+pl.map(p=>{const s=at[p.id]||"presente";
-    const b=(k,c,l)=>`<button class="${c} ${s===k?"on":""}" data-act="att" data-id="${p.id}" data-s="${k}">${l}</button>`;
-    return `<div class="item" style="cursor:default"><div><b>${esc(p.name)}</b><div class="mut">${esc(p.position)}</div></div><div class="seg">${b("presente","p","P")}${b("assente","a","A")}${b("infortunato","i","I")}</div></div>`}).join("")||`<p class="mut">Aggiungi prima i giocatori nella Rosa.</p>`;
-},
-esercizi(){
-  $("#prog").textContent=bulk;
-  $("#g").innerHTML=byName("drill","title").map(d=>`<div class="drill"><button class="x dl" data-act="dld" data-id="${d.id}" title="Scarica scheda">⬇</button><button class="x del" data-act="deld" data-id="${d.id}">🗑</button>${d.image?`<img src="${d.image}" alt="">`:`<img alt="" style="height:90px">`}<div class="t"><div style="display:flex;justify-content:space-between"><span class="cat">${esc(d.category)}</span><span class="mut">${d.duration?esc(d.duration)+" min":""} ${d.age?"· "+esc(d.age):""}</span></div><b>${esc(d.title)}</b><div class="mut">${esc(d.description)}</div></div></div>`).join("")||`<p class="mut">Il database è vuoto: crea un esercizio o importa delle foto.</p>`;
-},
-sedute(){
-  const q=($("#q")||{}).value||"",c=($("#cf")||{}).value||"";
-  $("#pk").innerHTML=byName("drill","title").filter(d=>(d.title+" "+d.description).toLowerCase().includes(q.toLowerCase())&&(!c||d.category===c)).map(d=>`<div class="item ${picked.includes(d.id)?"on":""}" data-act="pick" data-id="${d.id}"><b>${picked.includes(d.id)?"✓ ":""}${esc(d.title)}</b></div>`).join("")||`<p class="mut">Nessun esercizio trovato.</p>`;
-  $("#sv").disabled=!picked.length;$("#sv").textContent=`Salva seduta (${picked.length} selezionati)`;
-  const s=viewS&&by("session").find(x=>x.id===viewS);
-  if(s){$("#ar").innerHTML=`<div style="display:flex;justify-content:space-between"><div><div class="cat">${fd(s.date)}</div><h3>${esc(s.title)}</h3></div><span><button class="x" data-act="dls" data-id="${s.id}" title="Scarica PDF">⬇</button><button class="x" data-act="close">✕</button></span></div>`+s.drillIds.map((id,i)=>{const d=by("drill").find(x=>x.id===id);return d?`<div class="item" style="display:block;cursor:default"><span class="num">${i+1}</span><b>${esc(d.title)}</b>${d.image?`<img class="big" src="${d.image}" alt="">`:""}</div>`:""}).join("");return}
-  $("#ar").innerHTML=`<h3>Archivio sedute</h3>`+(byDate("session").map(x=>`<div class="item" data-act="vs" data-id="${x.id}"><div><b>${esc(x.title)}</b><div class="mut">${fd(x.date)} · ${x.drillIds.length} esercizi</div></div><button class="x" data-act="dels" data-id="${x.id}">🗑</button></div>`).join("")||`<p class="mut">Nessuna seduta salvata.</p>`);
-}};
+    <script type="text/babel">
+        const { useState, useEffect } = React;
 
-function compress(file){return new Promise(res=>{const r=new FileReader();r.onload=e=>{const im=new Image();im.onload=()=>{const M=800,k=Math.min(1,M/im.width),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",.7))};im.src=e.target.result};r.readAsDataURL(file)})}
-const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+        const fbConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : '{"apiKey":"dummy","projectId":"dummy"}';
+        const firebaseConfig = JSON.parse(fbConfigStr);
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'team-manager-app';
 
-document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-act]");if(!t)return;
-  const a=t.dataset.act,id=t.dataset.id;e.stopPropagation();
-  if(a==="tab"){tab=id;render();return}
-  if(a==="delp"||a==="deld"||a==="dele"||a==="dels"){
-    if(a==="dele"&&selEv===id)selEv=null;if(a==="dels"&&viewS===id)viewS=null;
-    store.del(id);return}
-  if(a==="ev"){selEv=id;fill()}
-  if(a==="att"){const ev=by("event").find(x=>x.id===selEv);if(ev)store.save(Object.assign({},ev,{attendance:Object.assign({},ev.attendance,{[id]:t.dataset.s})}))}
-  if(a==="pick"){picked=picked.includes(id)?picked.filter(x=>x!==id):picked.concat(id);fill()}
-  if(a==="vs"){viewS=id;fill()}if(a==="close"){viewS=null;fill()}
-  if(a==="dld")exportDrill(id);if(a==="dls")exportSession(id);
-  if(a==="sv"&&pend)saveFile(pend.name,pend.blob);
-  if(a==="cl"){const o=document.getElementById("ov");if(o)o.remove();$("#st").textContent=""}
-});
-document.addEventListener("input",e=>{if(e.target.id==="q"||e.target.id==="cf")fill()});
-document.addEventListener("change",async e=>{
-  if(e.target.id!=="bulk")return;
-  const fs=Array.from(e.target.files);if(!fs.length)return;
-  for(let i=0;i<fs.length;i++){
-    bulk=`Importazione ${i+1} di ${fs.length}…`;fill();
-    const img=await compress(fs[i]);
-    await store.save({id:uid(),kind:"drill",title:fs[i].name.replace(/\.[^/.]+$/,"").replace(/_/g," ").toUpperCase(),category:"Altro",description:"Esercizio importato da immagine.",image:img});
-  }
-  bulk="Importazione completata";fill();e.target.value="";
-});
-document.addEventListener("submit",async e=>{
-  const f=e.target.dataset.f;if(!f)return;e.preventDefault();
-  const v=Object.fromEntries(new FormData(e.target).entries()),id=uid();
-  if(f==="player")store.save({id,kind:"player",name:v.name.trim(),position:v.position,birth:v.birth||""});
-  if(f==="event"){const at={};by("player").forEach(p=>at[p.id]="presente");selEv=id;store.save({id,kind:"event",date:v.date,type:v.type,attendance:at})}
-  if(f==="drill"){const file=e.target.img.files[0];const image=file?await compress(file):null;
-    store.save({id,kind:"drill",title:v.title.trim(),category:v.category,description:v.description,duration:v.duration,age:v.age,image});}
-  if(f==="session"){if(!picked.length)return;store.save({id,kind:"session",title:v.title.trim(),date:v.date,drillIds:picked});picked=[]}
-  if(f!=="event")e.target.reset();
-  fill();
-});
-const loadJs=src=>new Promise((ok,ko)=>{const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
-let pend=null;
-function offer(name,blob){pend={name,blob};$("#st").innerHTML=`Pronto: ${esc(name)} <button class="b" data-act="sv" style="padding:6px 14px;margin-left:8px">Scarica</button>`}
-async function saveFile(name,blob){const st=$("#st");let d=null;try{d=await claude.use("downloads")}catch(e){}if(!d){if(/\.png$/.test(name)){const r=new FileReader();r.onload=()=>{st.innerHTML='Clic destro (o tieni premuto) sull’immagine per salvarla <button class="b" data-act="cl" style="padding:6px 14px;margin-left:8px">Chiudi</button>';let o=document.getElementById("ov");if(!o){o=document.createElement("div");o.id="ov";o.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:8;overflow:auto;padding:16px 16px 90px";document.body.appendChild(o)}o.innerHTML='<img style="width:100%;background:#fff" src="'+r.result+'">'};r.readAsDataURL(blob)}else st.textContent="Il PDF non è scaricabile in questa vista: aprilo dal browser o dal computer";return}try{await d.save({filename:name,data:blob});st.textContent="Download richiesto"}catch(e){st.textContent=(e&&e.code==="declined")?"Download annullato":"Download non riuscito ("+((e&&e.code)||"errore")+")"}}
-function stage(html){const w=document.createElement("div");w.style.cssText="position:fixed;left:-99999px;top:0;width:794px;background:#fff;color:#1e293b;font-family:sans-serif;padding:24px";w.innerHTML=html;document.body.appendChild(w);return w}
-const tag=t=>`<span style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:3px 9px;font-size:12px;font-weight:700;text-transform:uppercase;margin-right:6px">${t}</span>`;
-async function exportDrill(id){
-  const d=by("drill").find(x=>x.id===id);if(!d)return;
-  const st=$("#st"),prev=st.textContent;st.textContent="Preparo la scheda…";
-  const w=stage(`<h1 style="font-size:32px;margin:0 0 16px;text-transform:uppercase;font-weight:400">${esc(d.title)}</h1><div style="background:#f5f5f5;padding:14px 18px;margin-bottom:20px;font-size:14px"><b style="color:#f97316;font-size:24px">${esc(d.duration||"15")}</b> min &nbsp;·&nbsp; ${esc(d.age||"Prima squadra")} &nbsp;·&nbsp; ${esc(d.category)}</div><div style="display:flex;gap:24px"><div style="flex:1"><h3 style="color:#f97316;margin:0 0 10px">Esecuzione e istruzioni</h3><p style="white-space:pre-wrap;color:#555;line-height:1.6;margin:0">${esc(d.description||"Nessuna descrizione.")}</p></div>${d.image?`<div style="flex:1.2"><img src="${d.image}" style="width:100%;max-height:480px;object-fit:contain"></div>`:""}</div>`);
-  try{await loadJs("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
-    const c=await html2canvas(w,{backgroundColor:"#fff",scale:2});
-    const blob=await new Promise(r=>c.toBlob(r,"image/png"));
-    offer("Esercizio_"+d.title.replace(/\s+/g,"_")+".png",blob);
-  }catch(e){st.textContent="Creazione scheda non riuscita: "+((e&&e.message)||e)}
-  w.remove();
-}
-async function exportSession(id){
-  const s=by("session").find(x=>x.id===id);if(!s)return;
-  const st=$("#st"),prev=st.textContent;st.textContent="Preparo il PDF…";
-  const rows=s.drillIds.map((did,i)=>{const d=by("drill").find(x=>x.id===did);if(!d)return"";const imp=d.description==="Esercizio importato da immagine.";
-    return `<div style="page-break-inside:avoid;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid #e2e8f0"><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><div style="width:34px;height:34px;border-radius:50%;background:#22c55e;color:#fff;text-align:center;line-height:34px;font-weight:700">${i+1}</div><h3 style="margin:0;font-size:20px;text-transform:uppercase">${esc(d.title)}</h3></div>${imp?"":`<div style="margin-bottom:8px">${tag(esc(d.category))}${d.duration?tag(esc(d.duration)+" min"):""}${d.age?tag(esc(d.age)):""}</div><p style="white-space:pre-wrap;color:#475569;line-height:1.5;margin:0 0 10px">${esc(d.description)}</p>`}${d.image?`<div style="text-align:center"><img src="${d.image}" style="max-width:100%;max-height:380px;object-fit:contain"></div>`:""}</div>`}).join("");
-  const w=stage(`<div style="border-bottom:4px solid #22c55e;padding-bottom:16px;margin-bottom:28px"><h1 style="margin:0 0 6px;font-size:30px;text-transform:uppercase">${esc(s.title)}</h1><div style="color:#64748b">Data: ${fd(s.date)} · ${s.drillIds.length} esercizi</div></div>${rows}`);
-  try{const dl=window.claude?await window.claude.use("downloads").catch(()=>null):null;if(!dl){await loadJs("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");const c=await html2canvas(w,{backgroundColor:"#fff",scale:1.5});const pb=await new Promise(r=>c.toBlob(r,"image/png"));w.remove();await saveFile("Seduta.png",pb);return}
-    await loadJs("https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js");
-    const blob=await html2pdf().set({margin:[10,8,10,8],image:{type:"jpeg",quality:.95},html2canvas:{scale:2,backgroundColor:"#fff",windowWidth:794},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},pagebreak:{mode:["css","legacy"]}}).from(w).outputPdf("blob");
-    offer("Seduta_"+s.title.replace(/\s+/g,"_")+"_"+s.date+".pdf",blob);
-  }catch(e){st.textContent="Creazione PDF non riuscita: "+((e&&e.message)||e)}
-  w.remove();
-}
-init();
-</script></body></html>
+        function App() {
+            const [activeTab, setActiveTab] = useState('rosa');
+            const [user, setUser] = useState(null);
+            const [dbInstance, setDbInstance] = useState(null);
+            const [customUid, setCustomUid] = useState('');
+            const [showSyncModal, setShowSyncModal] = useState(false);
+            const [syncInput, setSyncInput] = useState('');
+
+            const [players, setPlayers] = useState([]);
+            const [events, setEvents] = useState([]);
+            const [drills, setDrills] = useState([]);
+            const [sessions, setSessions] = useState([]);
+
+            useEffect(() => {
+                if (!window.firebaseModules) return;
+                const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore } = window.firebaseModules;
+                
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                const db = getFirestore(app);
+                setDbInstance(db);
+
+                const initAuth = async () => {
+                    try {
+                        const savedUid = localStorage.getItem('kick_zone_custom_uid');
+                        if (savedUid) {
+                            setCustomUid(savedUid);
+                            setUser({ uid: savedUid });
+                            return;
+                        }
+
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Auth error:", error);
+                    }
+                };
+                initAuth();
+                
+                const unsubscribe = onAuthStateChanged(auth, (u) => {
+                    if (!localStorage.getItem('kick_zone_custom_uid') && u) {
+                        setUser(u);
+                        setCustomUid(u.uid);
+                    }
+                });
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (!user || !dbInstance) return;
+                const { onSnapshot, collection } = window.firebaseModules;
+                const userId = user.uid;
+
+                const unsubPlayers = onSnapshot(collection(dbInstance, 'artifacts', appId, 'users', userId, 'players'), (snapshot) => {
+                    setPlayers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => a.name.localeCompare(b.name)));
+                });
+
+                const unsubEvents = onSnapshot(collection(dbInstance, 'artifacts', appId, 'users', userId, 'events'), (snapshot) => {
+                    setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)));
+                });
+
+                const unsubDrills = onSnapshot(collection(dbInstance, 'artifacts', appId, 'users', userId, 'drills'), (snapshot) => {
+                    setDrills(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => a.title.localeCompare(b.title)));
+                });
+
+                const unsubSessions = onSnapshot(collection(dbInstance, 'artifacts', appId, 'users', userId, 'sessions'), (snapshot) => {
+                    setSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)));
+                });
+
+                return () => {
+                    unsubPlayers(); unsubEvents(); unsubDrills(); unsubSessions();
+                };
+            }, [user, dbInstance]);
+
+            useEffect(() => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            });
+
+            const handleApplySyncCode = (e) => {
+                e.preventDefault();
+                if (!syncInput.trim()) return;
+                const newUid = syncInput.trim();
+                localStorage.setItem('kick_zone_custom_uid', newUid);
+                setCustomUid(newUid);
+                setUser({ uid: newUid });
+                setShowSyncModal(false);
+                setSyncInput('');
+            };
+
+            const handleResetSync = () => {
+                localStorage.removeItem('kick_zone_custom_uid');
+                window.location.reload();
+            };
+
+            return (
+                <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden">
+                    {showSyncModal && (
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-6">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                        <i data-lucide="cloud" className="w-6 h-6 text-green-500"></i> Sincronizza Dispositivo
+                                    </h3>
+                                    <button onClick={() => setShowSyncModal(false)} className="text-slate-400 hover:text-white">
+                                        <i data-lucide="x" className="w-5 h-5"></i>
+                                    </button>
+                                </div>
+                                <p className="text-sm text-slate-400">
+                                    Il tuo codice ID attuale è: <br/>
+                                    <code className="bg-slate-950 text-green-400 px-3 py-1.5 rounded block mt-2 text-xs font-mono select-all break-all border border-slate-800">{user?.uid}</code>
+                                </p>
+                                <p className="text-sm text-slate-400">
+                                    Copia questo codice dal tuo PC e incollalo qui sotto sul tuo smartphone (o viceversa) per vedere la stessa identica rosa e gli stessi esercizi in tempo reale!
+                                </p>
+                                <form onSubmit={handleApplySyncCode} className="space-y-4">
+                                    <input 
+                                        type="text" value={syncInput} onChange={(e) => setSyncInput(e.target.value)} 
+                                        placeholder="Incolla qui il codice ID dell'altro dispositivo..." 
+                                        required
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm outline-none focus:border-green-500 font-mono"
+                                    />
+                                    <div className="flex gap-3">
+                                        <button type="button" onClick={() => setShowSyncModal(false)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-2.5 rounded-lg text-sm font-medium">Annulla</button>
+                                        <button type="submit" className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-lg text-sm font-medium">Connetti</button>
+                                    </div>
+                                </form>
+                                {localStorage.getItem('kick_zone_custom_uid') && (
+                                    <button onClick={handleResetSync} className="w-full text-red-400 hover:text-red-300 text-xs text-center pt-2">
+                                        Disconnetti e torna a un profilo casuale
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-20 shadow-xl">
+                        <div className="p-6 border-b border-slate-800">
+                            <div className="flex items-center gap-3 text-green-500 font-bold text-xl uppercase tracking-wider">
+                                <i data-lucide="activity" className="w-7 h-7"></i>
+                                <span>Kick Zone Coach</span>
+                            </div>
+                        </div>
+                        
+                        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+                            <NavItem icon="users" label="Rosa" id="rosa" active={activeTab === 'rosa'} onClick={setActiveTab} />
+                            <NavItem icon="calendar-check" label="Presenze" id="presenze" active={activeTab === 'presenze'} onClick={setActiveTab} />
+                            <NavItem icon="dumbbell" label="Database Esercizi" id="esercizi" active={activeTab === 'esercizi'} onClick={setActiveTab} />
+                            <NavItem icon="clipboard-list" label="Sedute Allenamento" id="sedute" active={activeTab === 'sedute'} onClick={setActiveTab} />
+                        </nav>
+                        
+                        <div className="p-4 border-t border-slate-800 text-center">
+                            <button onClick={() => setShowSyncModal(true)} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2.5 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition-colors border border-slate-700/50 shadow">
+                                <i data-lucide="cloud" className="w-4 h-4 text-green-400"></i>
+                                <span>Sincronizza App</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-slate-950">
+                        <header className="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur flex items-center justify-between px-8 shrink-0 z-10 sticky top-0">
+                            <h2 className="text-xl font-semibold capitalize text-white">
+                                {activeTab.replace('-', ' ')}
+                            </h2>
+                        </header>
+
+                        <main className="flex-1 overflow-y-auto p-8 relative">
+                            <div className="max-w-7xl mx-auto h-full">
+                                {!user ? (
+                                    <div className="h-full flex items-center justify-center text-slate-500 flex-col gap-4">
+                                        <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                                        Caricamento Database...
+                                    </div>
+                                ) : (
+                                    <>
+                                        {activeTab === 'rosa' && <RosaView players={players} user={user} db={dbInstance} appId={appId} />}
+                                        {activeTab === 'presenze' && <PresenzeView players={players} events={events} user={user} db={dbInstance} appId={appId} />}
+                                        {activeTab === 'esercizi' && <EserciziView drills={drills} user={user} db={dbInstance} appId={appId} />}
+                                        {activeTab === 'sedute' && <SeduteView drills={drills} sessions={sessions} user={user} db={dbInstance} appId={appId} />}
+                                    </>
+                                )}
+                            </div>
+                        </main>
+                    </div>
+                </div>
+            );
+        }
+
+        function NavItem({ icon, label, id, active, onClick }) {
+            return (
+                <button
+                    onClick={() => onClick(id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                        active 
+                            ? 'bg-green-500/10 text-green-400 border border-green-500/30' 
+                            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-transparent'
+                    }`}
+                >
+                    <i data-lucide={icon} className="w-5 h-5"></i>
+                    <span className="font-medium">{label}</span>
+                </button>
+            );
+        }
+
+        function RosaView({ players, user, db, appId }) {
+            const [name, setName] = useState('');
+            const [position, setPosition] = useState('Centrocampista');
+            const [birthDate, setBirthDate] = useState('');
+
+            const handleAdd = async (e) => {
+                e.preventDefault();
+                if (!name.trim() || !user || !db) return;
+                const { doc, setDoc } = window.firebaseModules;
+                const newPlayer = { id: Date.now().toString(), name, position, birthDate: birthDate || '' };
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', newPlayer.id), newPlayer);
+                    setName(''); setBirthDate('');
+                } catch (err) { console.error(err); }
+            };
+
+            const handleDelete = async (id) => {
+                if (!db) return;
+                const { doc, deleteDoc } = window.firebaseModules;
+                try { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'players', id)); } 
+                catch (err) { console.error(err); }
+            };
+
+            return (
+                <div className="space-y-8">
+                    <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg">
+                        <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                            <i data-lucide="plus" className="w-5 h-5 text-green-500"></i> Aggiungi Giocatore
+                        </h3>
+                        <form onSubmit={handleAdd} className="flex flex-wrap gap-4 items-end">
+                            <div className="flex-1 min-w-[200px]">
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Nome e Cognome</label>
+                                <input 
+                                    type="text" value={name} onChange={(e) => setName(e.target.value)} required
+                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none"
+                                />
+                            </div>
+                            <div className="w-48">
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Ruolo</label>
+                                <select 
+                                    value={position} onChange={(e) => setPosition(e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none"
+                                >
+                                    <option>Portiere</option>
+                                    <option>Difensore</option>
+                                    <option>Centrocampista</option>
+                                    <option>Attaccante</option>
+                                </select>
+                            </div>
+                            <div className="w-44">
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Data di Nascita</label>
+                                <input 
+                                    type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none"
+                                />
+                            </div>
+                            <button type="submit" className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                Salva
+                            </button>
+                        </form>
+                    </div>
+
+                    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-lg">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-800/50 border-b border-slate-800 text-slate-400 text-sm">
+                                <tr>
+                                    <th className="px-6 py-4">Nome</th>
+                                    <th className="px-6 py-4">Ruolo</th>
+                                    <th className="px-6 py-4">Data di Nascita</th>
+                                    <th className="px-6 py-4 text-right">Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/50">
+                                {players.length === 0 && (
+                                    <tr><td colSpan="4" className="text-center py-8 text-slate-500">Nessun giocatore in rosa.</td></tr>
+                                )}
+                                {players.map(p => (
+                                    <tr key={p.id} className="hover:bg-slate-800/20">
+                                        <td className="px-6 py-4 text-white font-medium">{p.name}</td>
+                                        <td className="px-6 py-4"><span className="bg-slate-800 px-2 py-1 rounded text-xs">{p.position}</span></td>
+                                        <td className="px-6 py-4 text-slate-300 font-medium">
+                                            {p.birthDate ? new Date(p.birthDate).toLocaleDateString('it-IT') : '-'}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <button onClick={() => handleDelete(p.id)} className="text-slate-500 hover:text-red-500 p-2">
+                                                <i data-lucide="trash-2" className="w-4 h-4"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        }
+
+        function PresenzeView({ players, events, user, db, appId }) {
+            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const [type, setType] = useState('Allenamento');
+            const [selectedEventId, setSelectedEventId] = useState(null);
+
+            const handleCreateEvent = async (e) => {
+                e.preventDefault();
+                if (!user || !db) return;
+                const { doc, setDoc } = window.firebaseModules;
+                const initialAttendance = {};
+                players.forEach(p => { initialAttendance[p.id] = 'presente'; });
+                const newEvent = { id: Date.now().toString(), date, type, attendance: initialAttendance };
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', newEvent.id), newEvent);
+                    setSelectedEventId(newEvent.id);
+                } catch (err) { console.error(err); }
+            };
+
+            const updateAttendance = async (eventId, playerId, status) => {
+                if (!user || !db) return;
+                const { doc, setDoc } = window.firebaseModules;
+                const eventToUpdate = events.find(ev => ev.id === eventId);
+                if (!eventToUpdate) return;
+                const updatedEvent = { ...eventToUpdate, attendance: { ...eventToUpdate.attendance, [playerId]: status } };
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', eventId), updatedEvent);
+                } catch (err) { console.error(err); }
+            };
+
+            const handleDeleteEvent = async (id) => {
+                if (!db) return;
+                const { doc, deleteDoc } = window.firebaseModules;
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', id));
+                    if (selectedEventId === id) setSelectedEventId(null);
+                } catch (err) { console.error(err); }
+            };
+
+            const selectedEvent = events.find(e => e.id === selectedEventId);
+
+            return (
+                <div className="flex gap-8 h-[calc(100vh-8rem)]">
+                    <div className="w-1/3 flex flex-col gap-4">
+                        <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-lg shrink-0">
+                            <h3 className="font-medium text-white mb-4">Nuovo Evento</h3>
+                            <form onSubmit={handleCreateEvent} className="space-y-3">
+                                <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none" />
+                                <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none">
+                                    <option>Allenamento</option>
+                                    <option>Partita</option>
+                                </select>
+                                <button type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg">Crea Registro</button>
+                            </form>
+                        </div>
+
+                        <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 overflow-y-auto">
+                            {events.map(ev => (
+                                <div key={ev.id} onClick={() => setSelectedEventId(ev.id)} className={`p-4 cursor-pointer border-b border-slate-800/50 flex justify-between items-center group ${selectedEventId === ev.id ? 'bg-green-500/10 border-l-2 border-l-green-500' : 'hover:bg-slate-800/50'}`}>
+                                    <div>
+                                        <div className="font-medium text-white">{new Date(ev.date).toLocaleDateString('it-IT')}</div>
+                                        <div className="text-xs text-slate-500">{ev.type}</div>
+                                    </div>
+                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteEvent(ev.id); }} className="text-red-500 opacity-0 group-hover:opacity-100 p-2"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="w-2/3 bg-slate-900 rounded-xl border border-slate-800 flex flex-col shadow-lg overflow-hidden">
+                        {selectedEvent ? (
+                            <>
+                                <div className="p-6 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center shrink-0">
+                                    <h2 className="text-xl font-bold text-white">{selectedEvent.type} - {new Date(selectedEvent.date).toLocaleDateString('it-IT')}</h2>
+                                    <div className="text-sm">Presenti: <span className="text-green-500 font-bold">{Object.values(selectedEvent.attendance || {}).filter(s => s === 'presente').length}</span>/{players.length}</div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-4">
+                                    <div className="space-y-2">
+                                        {players.map(p => {
+                                            const status = (selectedEvent.attendance && selectedEvent.attendance[p.id]) || 'presente';
+                                            return (
+                                                <div key={p.id} className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                                    <div>
+                                                        <div className="font-medium text-white">{p.name}</div>
+                                                        <div className="text-xs text-slate-500">{p.position}</div>
+                                                    </div>
+                                                    <div className="flex gap-1 bg-slate-900 p-1 rounded-lg">
+                                                        <button onClick={() => updateAttendance(selectedEvent.id, p.id, 'presente')} className={`px-3 py-1 rounded text-xs font-bold ${status === 'presente' ? 'bg-green-600 text-white' : 'text-slate-500 hover:text-white'}`}>P</button>
+                                                        <button onClick={() => updateAttendance(selectedEvent.id, p.id, 'assente')} className={`px-3 py-1 rounded text-xs font-bold ${status === 'assente' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-white'}`}>A</button>
+                                                        <button onClick={() => updateAttendance(selectedEvent.id, p.id, 'infortunato')} className={`px-3 py-1 rounded text-xs font-bold ${status === 'infortunato' ? 'bg-orange-500 text-white' : 'text-slate-500 hover:text-white'}`}>I</button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center text-slate-500">Seleziona un evento</div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function EserciziView({ drills, user, db, appId }) {
+            const [title, setTitle] = useState('');
+            const [category, setCategory] = useState('Tattica');
+            const [description, setDescription] = useState('');
+            const [image, setImage] = useState(null);
+            const [duration, setDuration] = useState('');
+            const [age, setAge] = useState('');
+            const [isUploading, setIsUploading] = useState(false);
+            const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+            const [exportDrillData, setExportDrillData] = useState(null);
+
+            const compressAndExtractBase64 = (file) => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const MAX_WIDTH = 1000; 
+                            let width = img.width;
+                            let height = img.height;
+                            if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
+                            canvas.width = width; canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            resolve(canvas.toDataURL('image/jpeg', 0.8));
+                        };
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
+            };
+
+            const handleBulkUpload = async (e) => {
+                const files = Array.from(e.target.files);
+                if (!files.length || !user || !db) return;
+                setIsUploading(true);
+                setUploadProgress({ current: 0, total: files.length });
+                const { doc, setDoc } = window.firebaseModules;
+
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    try {
+                        let titleFromName = file.name.replace(/\.[^/.]+$/, "").replace(/[_]/g, " ").toUpperCase();
+                        const compressedImage = await compressAndExtractBase64(file);
+                        const newDrill = { 
+                            id: Date.now().toString() + i, 
+                            title: titleFromName, 
+                            category: 'Altro', 
+                            description: 'Esercizio importato da immagine.', 
+                            image: compressedImage 
+                        };
+                        await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'drills', newDrill.id), newDrill);
+                        setUploadProgress({ current: i + 1, total: files.length });
+                    } catch (err) { console.error(err); }
+                }
+                setIsUploading(false);
+                e.target.value = '';
+            };
+
+            const handleDelete = async (id) => {
+                if (!db) return;
+                const { doc, deleteDoc } = window.firebaseModules;
+                try { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'drills', id)); } 
+                catch (err) { console.error(err); }
+            };
+
+            const downloadDrill = async (drill) => {
+                setExportDrillData(drill);
+                setTimeout(async () => {
+                    const element = document.getElementById('export-template');
+                    if (!element) return;
+                    try {
+                        const canvas = await window.html2canvas(element, { backgroundColor: '#ffffff', scale: 2 });
+                        const link = document.createElement('a');
+                        link.download = `Esercizio_${drill.title.replace(/\s+/g, '_')}.png`;
+                        link.href = canvas.toDataURL('image/png');
+                        link.click();
+                        setExportDrillData(null);
+                    } catch (err) { console.error(err); setExportDrillData(null); }
+                }, 500);
+            };
+
+            const handleImageChange = async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const base64 = await compressAndExtractBase64(file);
+                    setImage(base64);
+                }
+            };
+
+            const handleAdd = async (e) => {
+                e.preventDefault();
+                if (!title.trim() || !user || !db) return;
+                const { doc, setDoc } = window.firebaseModules;
+                const newDrill = { 
+                    id: Date.now().toString(), 
+                    title, category, description, image, duration, age
+                };
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'drills', newDrill.id), newDrill);
+                    setTitle(''); setDescription(''); setImage(null); setCategory('Tattica'); setDuration(''); setAge('');
+                    const fileInput = document.getElementById('single-image-upload');
+                    if (fileInput) fileInput.value = '';
+                } catch (err) { console.error(err); }
+            };
+
+            return (
+                <div className="flex flex-col gap-6 h-[calc(100vh-8rem)] relative">
+                    {exportDrillData && (
+                        <div className="absolute left-[-9999px] top-0 pointer-events-none z-[-1]">
+                            <div id="export-template" className="w-[1100px] bg-white text-slate-800 font-sans p-10 flex flex-col gap-8">
+                                <h1 className="text-4xl text-slate-700 font-normal uppercase tracking-wide">{exportDrillData.title}</h1>
+                                <div className="bg-[#f5f5f5] flex border-y border-[#eaeaea]">
+                                    <div className="p-6 min-w-[180px] border-r border-white flex flex-col justify-center">
+                                        <div className="text-orange-500 text-3xl font-normal">{exportDrillData.duration || '15'}</div>
+                                        <div className="text-sm text-slate-500 font-medium">Durata esercizio</div>
+                                    </div>
+                                    <div className="p-6 flex-1 flex gap-16">
+                                        <div>
+                                            <div className="text-sm text-slate-500 mb-2 font-medium">Categoria di età</div>
+                                            <div className="text-base text-slate-800">{exportDrillData.age || 'Prima Squadra'}</div>
+                                        </div>
+                                        <div className="flex items-start gap-3 mt-1">
+                                            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full mt-2"></div>
+                                            <div className="text-base text-slate-800">{exportDrillData.category}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-10">
+                                    <div className="w-[45%]">
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="bg-[#444444] text-orange-500 p-2 rounded">
+                                                <i data-lucide="settings" className="w-6 h-6"></i>
+                                            </div>
+                                            <h3 className="text-orange-500 font-extrabold text-xl">Esecuzione / Organizzazione e istruzioni</h3>
+                                        </div>
+                                        <p className="text-[#555555] text-base leading-relaxed whitespace-pre-wrap font-medium">
+                                            {exportDrillData.description || 'Nessuna descrizione inserita.'}
+                                        </p>
+                                    </div>
+                                    <div className="w-[55%]">
+                                        {exportDrillData.image ? (
+                                            <img src={exportDrillData.image} alt="schema" className="w-full object-contain max-h-[500px]" />
+                                        ) : (
+                                            <div className="w-full h-[400px] bg-green-500/10 flex items-center justify-center border border-green-500/20">
+                                                <i data-lucide="dumbbell" className="w-16 h-16 text-green-500/30"></i>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex flex-col lg:flex-row gap-6 shrink-0">
+                        <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg flex-1">
+                            <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                                <i data-lucide="plus" className="w-5 h-5 text-green-500"></i> Nuovo Esercizio Manuale
+                            </h3>
+                            <form onSubmit={handleAdd} className="space-y-4">
+                                <div className="flex gap-4">
+                                    <div className="flex-1">
+                                        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Titolo Esercizio" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-green-500" />
+                                    </div>
+                                    <div className="w-32">
+                                        <input type="text" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="Minuti (es. 15)" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-green-500" />
+                                    </div>
+                                    <div className="w-32">
+                                        <input type="text" value={age} onChange={(e) => setAge(e.target.value)} placeholder="Età (es. U15)" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-green-500" />
+                                    </div>
+                                    <div className="w-48">
+                                        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-green-500">
+                                            <option>Tattica</option>
+                                            <option>Tecnica</option>
+                                            <option>Fisico</option>
+                                            <option>Partita a tema</option>
+                                            <option>Altro</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrizione dell'esercizio..." className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-green-500 h-20 resize-none"></textarea>
+                                <div className="flex justify-between items-center">
+                                    <input type="file" accept="image/*" id="single-image-upload" onChange={handleImageChange} className="text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-800 file:text-green-500 hover:file:bg-slate-700 cursor-pointer" />
+                                    <button type="submit" className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                        Salva
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg w-full lg:w-1/3 flex flex-col justify-center items-center text-center gap-4">
+                            <div>
+                                <h3 className="text-lg font-medium text-white flex items-center justify-center gap-2 mb-2">
+                                    <i data-lucide="upload" className="w-5 h-5 text-blue-500"></i> Importazione Massiva
+                                </h3>
+                                <p className="text-sm text-slate-400">Hai schede già pronte? Caricale tutte in blocco.</p>
+                            </div>
+                            <div className="relative w-full mt-2">
+                                <input 
+                                    type="file" multiple accept="image/*" onChange={handleBulkUpload} disabled={isUploading}
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                                />
+                                <button disabled={isUploading} className="w-full bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-lg font-medium text-sm transition-colors shadow-lg">
+                                    {isUploading ? 'Importazione in corso...' : 'Seleziona Foto Multiple'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {isUploading && (
+                        <div className="bg-slate-900 p-6 rounded-xl border border-blue-500/50 flex flex-col items-center justify-center space-y-4 shrink-0">
+                            <div className="text-white font-medium">Caricamento schede in corso... Non chiudere la pagina!</div>
+                            <div className="w-full bg-slate-800 rounded-full h-4 max-w-xl overflow-hidden border border-slate-700">
+                                <div className="bg-blue-500 h-4 transition-all duration-300 relative" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}></div>
+                            </div>
+                            <div className="text-blue-400 text-sm font-medium">{uploadProgress.current} di {uploadProgress.total} salvati</div>
+                        </div>
+                    )}
+
+                    <div className="flex-1 overflow-y-auto">
+                        {drills.length === 0 && !isUploading ? (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-500 bg-slate-900/50 rounded-xl border border-dashed border-slate-700">
+                                <i data-lucide="image" className="w-16 h-16 text-slate-600 mb-4"></i>
+                                <p>Il tuo database è vuoto.</p>
+                                <p className="text-sm">Inizia creando un esercizio o importando le foto.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-8">
+                                {drills.map(drill => (
+                                    <div key={drill.id} className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-lg group relative flex flex-col h-[400px]">
+                                        <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                            <button onClick={() => downloadDrill(drill)} title="Scarica Scheda" className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg shadow">
+                                                {exportDrillData?.id === drill.id ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <i data-lucide="download" className="w-4 h-4"></i>}
+                                            </button>
+                                            <button onClick={() => handleDelete(drill.id)} className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg shadow"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
+                                        </div>
+                                        <div className="h-48 bg-slate-950 shrink-0 border-b border-slate-800 flex items-center justify-center overflow-hidden">
+                                            {drill.image ? (
+                                                <img src={drill.image} alt={drill.title} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <i data-lucide="dumbbell" className="w-12 h-12 text-slate-800"></i>
+                                            )}
+                                        </div>
+                                        <div className="p-4 flex flex-col flex-1">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-xs font-bold uppercase text-green-500 tracking-wider">{drill.category}</span>
+                                                <span className="text-xs text-slate-500">{drill.duration ? `${drill.duration} min` : ''} {drill.age ? `• ${drill.age}` : ''}</span>
+                                            </div>
+                                            <h4 className="font-bold text-lg text-white mb-2 line-clamp-2 leading-tight">{drill.title}</h4>
+                                            <p className="text-sm text-slate-400 line-clamp-4">{drill.description}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function SeduteView({ drills, sessions, user, db, appId }) {
+            const [title, setTitle] = useState('');
+            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [filterCategory, setFilterCategory] = useState('');
+            const [selectedDrills, setSelectedDrills] = useState([]);
+            const [sessionSearchTerm, setSessionSearchTerm] = useState('');
+            const [viewingSession, setViewingSession] = useState(null);
+            const [exportSessionData, setExportSessionData] = useState(null);
+
+            const filteredDrills = drills.filter(d => {
+                const matchesSearch = d.title.toLowerCase().includes(searchTerm.toLowerCase()) || d.description.toLowerCase().includes(searchTerm.toLowerCase());
+                const matchesCategory = filterCategory ? d.category === filterCategory : true;
+                return matchesSearch && matchesCategory;
+            });
+
+            const filteredSessions = sessions.filter(s => {
+                return s.title.toLowerCase().includes(sessionSearchTerm.toLowerCase());
+            });
+
+            const toggleDrill = (id) => {
+                setSelectedDrills(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+            };
+
+            const handleSaveSession = async (e) => {
+                e.preventDefault();
+                if (!title.trim() || selectedDrills.length === 0 || !user || !db) return;
+                const { doc, setDoc } = window.firebaseModules;
+                const newSession = { id: Date.now().toString(), title, date, drillIds: selectedDrills };
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', newSession.id), newSession);
+                    setTitle(''); setSelectedDrills([]); setSearchTerm('');
+                } catch (err) { console.error(err); }
+            };
+
+            const handleDeleteSession = async (id) => {
+                if (!db) return;
+                const { doc, deleteDoc } = window.firebaseModules;
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', id));
+                    if (viewingSession?.id === id) setViewingSession(null);
+                } catch (err) { console.error(err); }
+            };
+
+            const downloadSession = async (session) => {
+                setExportSessionData(session);
+                setTimeout(async () => {
+                    const element = document.getElementById('export-session-template');
+                    if (!element) return;
+                    try {
+                        const opt = {
+                            margin:       [0, 5, 0, 0], 
+                            filename:     `Seduta_${session.title.replace(/\s+/g, '_')}_${session.date}.pdf`,
+                            image:        { type: 'jpeg', quality: 0.98 },
+                            html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 800, scrollX: 0, scrollY: 0 },
+                            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                            pagebreak:    { mode: ['css', 'legacy'] } 
+                        };
+                        await window.html2pdf().set(opt).from(element).save();
+                        setExportSessionData(null);
+                    } catch (err) { 
+                        console.error(err); 
+                        setExportSessionData(null); 
+                    }
+                }, 800);
+            };
+
+            return (
+                <div className="flex gap-8 h-[calc(100vh-8rem)] relative">
+                    {exportSessionData && (
+                        <div style={{ position: 'absolute', top: 0, left: 0, zIndex: -10, pointerEvents: 'none' }}>
+                            <div id="export-session-template" style={{ width: '794px', backgroundColor: 'white', padding: '0 5px 0 95px', color: '#1e293b', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
+                                <div style={{ borderBottom: '4px solid #22c55e', paddingBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '40px', paddingTop: '40px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                                    <div>
+                                        <h1 style={{ fontSize: '36px', fontWeight: 'bold', textTransform: 'uppercase', margin: '0 0 8px 0', color: '#1e293b', lineHeight: '1.2' }}>{exportSessionData.title}</h1>
+                                        <h2 style={{ fontSize: '18px', color: '#64748b', margin: 0, fontWeight: '500' }}>Data: {new Date(exportSessionData.date).toLocaleDateString('it-IT')}</h2>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }}>Totale Esercizi</div>
+                                        <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#22c55e', lineHeight: '1.1' }}>{exportSessionData.drillIds.length}</div>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'block', width: '100%' }}>
+                                    {exportSessionData.drillIds.map((drillId, idx) => {
+                                        const drill = drills.find(d => d.id === drillId);
+                                        if (!drill) return null;
+                                        const isImported = drill.description === 'Esercizio importato da immagine.';
+
+                                        return (
+                                            <div key={drillId} style={{ pageBreakInside: 'avoid', breakInside: 'avoid', display: 'block', width: '100%', marginBottom: '40px', paddingBottom: '40px', borderBottom: '1px solid #e2e8f0' }}>
+                                                {isImported ? (
+                                                    <div style={{ width: '100%' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+                                                            <div style={{ width: '40px', height: '40px', backgroundColor: '#22c55e', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 'bold', flexShrink: 0 }}>{idx + 1}</div>
+                                                            <h3 style={{ fontSize: '24px', fontWeight: '800', textTransform: 'uppercase', color: '#1e293b', margin: 0 }}>{drill.title}</h3>
+                                                        </div>
+                                                        <div style={{ textAlign: 'center', width: '100%' }}>
+                                                            {drill.image && (
+                                                                <img src={drill.image} alt={drill.title} style={{ maxWidth: '100%', maxHeight: '500px', display: 'inline-block', objectFit: 'contain', borderRadius: '8px' }} />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ display: 'flex', width: '100%', gap: '24px' }}>
+                                                        <div style={{ flexShrink: 0 }}>
+                                                            <div style={{ width: '40px', height: '40px', backgroundColor: '#22c55e', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 'bold' }}>{idx + 1}</div>
+                                                        </div>
+                                                        <div style={{ flex: '1', minWidth: 0 }}>
+                                                            <h3 style={{ fontSize: '24px', fontWeight: '800', textTransform: 'uppercase', color: '#1e293b', margin: '0 0 12px 0', lineHeight: '1.2' }}>{drill.title}</h3>
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '16px', textTransform: 'uppercase' }}>
+                                                                <span style={{ backgroundColor: '#fff7ed', color: '#f97316', padding: '4px 10px', borderRadius: '4px', border: '1px solid #ffedd5' }}>{drill.category}</span>
+                                                                {drill.duration && <span style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>⏱ {drill.duration} min</span>}
+                                                                {drill.age && <span style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>👥 {drill.age}</span>}
+                                                            </div>
+                                                            <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.6', whiteSpace: 'pre-wrap', margin: 0, fontWeight: '500' }}>
+                                                                {drill.description || 'Nessuna descrizione inserita.'}
+                                                            </p>
+                                                        </div>
+                                                        <div style={{ width: '320px', flexShrink: 0, display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
+                                                            {drill.image ? (
+                                                                <img src={drill.image} alt={drill.title} style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                                                            ) : (
+                                                                <div style={{ width: '100%', height: '200px', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#94a3b8', fontSize: '14px' }}>
+                                                                    Nessun'immagine
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="w-1/2 flex flex-col gap-4">
+                        <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-lg shrink-0">
+                            <h3 className="font-medium text-white mb-4">Pianifica Nuova Seduta</h3>
+                            <form onSubmit={handleSaveSession} className="space-y-4">
+                                <div className="flex gap-4">
+                                    <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-1/3 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none" />
+                                    <input type="text" value={title} onChange={e => setTitle(e.target.value)} required placeholder="Titolo seduta (es. Rifinitura)" className="w-2/3 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none" />
+                                </div>
+                                <div className="flex gap-2 p-2 bg-slate-950 rounded-lg border border-slate-800">
+                                    <div className="relative flex-1">
+                                        <i data-lucide="search" className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                                        <input 
+                                            type="text" placeholder="Cerca nel database..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="w-full bg-transparent border-none pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:ring-0"
+                                        />
+                                    </div>
+                                    <div className="relative w-1/3 border-l border-slate-800 pl-2">
+                                        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-transparent border-none py-2 text-sm text-slate-300 outline-none appearance-none cursor-pointer">
+                                            <option value="">Tutte le Categorie</option>
+                                            <option value="Tattica">Tattica</option>
+                                            <option value="Tecnica">Tecnica</option>
+                                            <option value="Fisico">Fisico</option>
+                                            <option value="Partita a tema">Partita a tema</option>
+                                            <option value="Altro">Altro</option>
+                                        </select>
+                                        <i data-lucide="filter" className="w-3 h-3 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                    </div>
+                                </div>
+                                <div className="h-64 overflow-y-auto bg-slate-950 border border-slate-800 rounded-lg p-2 space-y-2">
+                                    {filteredDrills.length === 0 && <p className="text-slate-500 text-sm text-center py-8">Nessun esercizio trovato.</p>}
+                                    {filteredDrills.map(drill => (
+                                        <div 
+                                            key={drill.id} onClick={() => toggleDrill(drill.id)}
+                                            className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center gap-3 ${selectedDrills.includes(drill.id) ? 'bg-green-500/10 border-green-500/50' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
+                                        >
+                                            <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border ${selectedDrills.includes(drill.id) ? 'bg-green-500 border-green-500' : 'border-slate-600 bg-slate-800'}`}>
+                                                {selectedDrills.includes(drill.id) && <i data-lucide="check-circle" className="w-3 h-3 text-white"></i>}
+                                            </div>
+                                            <div className="flex-1 truncate">
+                                                <div className={`font-medium text-sm truncate ${selectedDrills.includes(drill.id) ? 'text-green-400' : 'text-white'}`}>{drill.title}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button type="submit" disabled={selectedDrills.length === 0} className="w-full bg-green-600 disabled:bg-slate-800 disabled:text-slate-500 text-white py-3 rounded-lg font-bold">
+                                    Salva Seduta ({selectedDrills.length} selezionati)
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div className="w-1/2 flex flex-col h-full bg-slate-900 rounded-xl border border-slate-800 shadow-lg overflow-hidden relative">
+                        {viewingSession ? (
+                            <div className="flex flex-col h-full relative p-6">
+                                <div className="absolute top-4 right-4 flex gap-2 z-10">
+                                    <button onClick={() => downloadSession(viewingSession)} title="Scarica Seduta PDF" className="text-slate-400 hover:text-white bg-slate-800 hover:bg-blue-500 rounded-full p-2 transition-colors shadow">
+                                        {exportSessionData?.id === viewingSession.id ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <i data-lucide="download" className="w-5 h-5"></i>}
+                                    </button>
+                                    <button onClick={() => setViewingSession(null)} title="Chiudi" className="text-slate-400 hover:text-white bg-slate-800 hover:bg-red-500 rounded-full p-2 transition-colors shadow">
+                                        <i data-lucide="x-circle" className="w-5 h-5"></i>
+                                    </button>
+                                </div>
+                                <div className="mb-6 border-b border-slate-800 pb-4 pr-24 shrink-0">
+                                    <div className="text-green-400 font-medium text-sm mb-1">{new Date(viewingSession.date).toLocaleDateString('it-IT')}</div>
+                                    <h2 className="text-2xl font-bold text-white">{viewingSession.title}</h2>
+                                </div>
+                                <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-4">
+                                    {viewingSession.drillIds.map((drillId, idx) => {
+                                        const drill = drills.find(d => d.id === drillId);
+                                        if (!drill) return null;
+                                        return (
+                                            <div key={drillId} className="bg-slate-950 p-4 rounded-lg border border-slate-800 flex flex-col gap-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-6 h-6 bg-green-500/20 text-green-400 rounded flex items-center justify-center font-bold text-xs">{idx + 1}</div>
+                                                    <h4 className="font-bold text-white text-lg">{drill.title}</h4>
+                                                </div>
+                                                {drill.image && (
+                                                    <div className="rounded-lg overflow-hidden border border-slate-700 w-full"><img src={drill.image} alt={drill.title} className="w-full object-contain bg-black max-h-64" /></div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col h-full">
+                                <div className="p-4 border-b border-slate-800 bg-slate-900/90 shrink-0 flex flex-col gap-3">
+                                    <h3 className="font-medium text-white flex items-center gap-2"><i data-lucide="file-text" className="w-4 h-4 text-slate-400"></i> Archivio Sedute</h3>
+                                    <div className="relative">
+                                        <i data-lucide="search" className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                                        <input 
+                                            type="text" placeholder="Cerca tra le sedute salvate..." value={sessionSearchTerm} onChange={(e) => setSessionSearchTerm(e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-sm text-white outline-none focus:border-green-500"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                    {filteredSessions.length === 0 && <div className="text-center text-slate-500 mt-10">Nessuna seduta trovata.</div>}
+                                    {filteredSessions.map(session => (
+                                        <div key={session.id} className="bg-slate-950 border border-slate-800 rounded-lg p-4 flex justify-between items-center group hover:border-green-500/50 transition-colors cursor-pointer" onClick={() => setViewingSession(session)}>
+                                            <div>
+                                                <h4 className="font-bold text-white mb-1 group-hover:text-green-400">{session.title}</h4>
+                                                <div className="text-xs text-slate-400 flex items-center gap-2"><i data-lucide="calendar" className="w-3 h-3"></i> {new Date(session.date).toLocaleDateString('it-IT')} • {session.drillIds.length} Esercizi</div>
+                                            </div>
+                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id); }} className="text-slate-600 hover:text-red-500 p-2 ml-4"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
