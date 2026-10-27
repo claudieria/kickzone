@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body class="bg-slate-950 text-slate-200">
-    <div id="root"></div>
+    <div id="root" class="relative z-10 bg-slate-950"></div>
 
     <script type="module">
         // --- DATABASE LOCALE OFFLINE POTENZIATO (INDEXED_DB) ---
@@ -81,21 +81,34 @@
             });
         };
 
+        // RECUPERO AUTOMATICO DEI DATI VECCHI!
         const migrateFromLocalStorage = async () => {
-            const migratedKey = 'kzc_migrated_to_idb';
+            const migratedKey = 'kzc_migrated_to_idb_v4_recovery';
             if (localStorage.getItem(migratedKey)) return;
             
-            let hasData = false;
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                if (key && key.startsWith(appId + '_')) {
-                    try {
-                        const data = JSON.parse(localStorage.getItem(key));
-                        const path = key.substring((appId + '_').length);
-                        await setLocalData(path, data);
-                        hasData = true;
-                    } catch (e) { console.error("Errore migrazione", key, e); }
-                }
+                try {
+                    if (!key) continue;
+                    const val = localStorage.getItem(key);
+                    const data = JSON.parse(val);
+                    
+                    // Identifica se è un dizionario (le nostre collezioni salvate)
+                    if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+                        // Verifica tutti i prefissi vecchi che potremmo aver usato
+                        if (key.startsWith('kick-zone-coach-local_')) {
+                            let path = key.substring('kick-zone-coach-local_'.length);
+                            await setLocalData(path, data);
+                        } 
+                        else if (key.startsWith('team-manager-app_')) {
+                            let path = key.substring('team-manager-app_'.length);
+                            await setLocalData(path, data);
+                        }
+                        else if (key.includes('artifacts/') && key.includes('/users/')) {
+                            await setLocalData(key, data);
+                        }
+                    }
+                } catch (e) { /* skip file non compatibili */ }
             }
             localStorage.setItem(migratedKey, 'true');
         };
@@ -213,13 +226,20 @@
                             dataToExport[key] = allData[key];
                         }
                     }
-                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport));
+                    
+                    // NUOVO SISTEMA (BLOB) PER SCARICARE BACKUP ENORMI IN MODO SICURO
+                    const jsonString = JSON.stringify(dataToExport);
+                    const blob = new Blob([jsonString], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    
                     const downloadAnchorNode = document.createElement('a');
-                    downloadAnchorNode.setAttribute("href", dataStr);
+                    downloadAnchorNode.setAttribute("href", url);
                     downloadAnchorNode.setAttribute("download", "kickzone_backup_" + new Date().toISOString().split('T')[0] + ".json");
                     document.body.appendChild(downloadAnchorNode);
                     downloadAnchorNode.click();
                     downloadAnchorNode.remove();
+                    URL.revokeObjectURL(url); // Libera la memoria del browser
+                    
                 } catch (e) {
                     alert("Errore durante l'esportazione: " + e.message);
                 }
@@ -251,6 +271,7 @@
                     }
                 };
                 reader.readAsText(file);
+                event.target.value = '';
             };
 
             useEffect(() => {
@@ -318,7 +339,7 @@
                                 {!user ? (
                                     <div className="h-full flex items-center justify-center text-slate-500 flex-col gap-4">
                                         <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
-                                        Avvio in corso...
+                                        Avvio in corso... Recupero dati...
                                     </div>
                                 ) : (
                                     <>
@@ -557,6 +578,7 @@
             const handleBulkUpload = async (e) => {
                 const fileInput = e.target;
                 const files = Array.from(fileInput.files);
+                // SVUOTAMENTO IMMEDIATO DEL PULSANTE
                 fileInput.value = ''; 
                 
                 if (!files.length) return;
@@ -647,7 +669,7 @@
                 <div className="flex flex-col gap-6 h-full relative">
                     
                     {exportDrillData && (
-                        <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -9999 }}>
+                        <div style={{ position: 'absolute', top: 0, left: 0, zIndex: -100 }}>
                             <div id="export-template" style={{ width: '1100px', backgroundColor: 'white', color: '#1e293b', padding: '40px', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
                                 <h1 style={{ fontSize: '36px', textTransform: 'uppercase', marginBottom: '20px', fontWeight: 'bold' }}>{exportDrillData.title}</h1>
                                 <div style={{ display: 'flex', borderTop: '1px solid #eaeaea', borderBottom: '1px solid #eaeaea', backgroundColor: '#f5f5f5', marginBottom: '30px' }}>
@@ -840,11 +862,12 @@
                     if (!element) return;
                     
                     const opt = {
-                        margin:       10, // 10mm costanti su ogni lato (nessun taglio)
+                        margin:       15, // 15 millimetri di margine su ogni lato per evitare tagli!
                         filename:     `Seduta_${session.title.replace(/\s+/g, '_')}.pdf`,
                         image:        { type: 'jpeg', quality: 1.0 },
                         html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
-                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                        pagebreak:    { mode: ['css', 'legacy'] }
                     };
                     
                     await window.html2pdf().set(opt).from(element).save();
@@ -856,8 +879,8 @@
                 <div className="flex gap-8 h-full relative">
                     
                     {exportSessionData && (
-                        <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -9999 }}>
-                            <div id="export-session-template" style={{ width: '700px', backgroundColor: 'white', padding: '20px', color: '#1e293b', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
+                        <div style={{ position: 'absolute', top: 0, left: 0, zIndex: -100 }}>
+                            <div id="export-session-template" style={{ width: '750px', backgroundColor: 'white', padding: '20px', color: '#1e293b', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
                                 <div style={{ borderBottom: '4px solid #22c55e', paddingBottom: '20px', marginBottom: '30px', pageBreakInside: 'avoid' }}>
                                     <h1 style={{ fontSize: '30px', fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>{exportSessionData.title}</h1>
                                     <h2 style={{ fontSize: '16px', color: '#64748b', margin: '5px 0 0 0' }}>Data: {new Date(exportSessionData.date).toLocaleDateString('it-IT')}</h2>
@@ -919,15 +942,15 @@
 
                     <div className="w-1/2 flex flex-col h-full bg-slate-900 rounded-xl border border-slate-800 shadow-lg overflow-hidden relative">
                         {viewingSession ? (
-                            <div className="flex flex-col h-full p-6 relative">
-                                <div className="absolute top-4 right-4 flex gap-2 z-10">
+                            <div className="flex flex-col h-full p-6 relative z-20 bg-slate-900">
+                                <div className="absolute top-4 right-4 flex gap-2 z-30">
                                     <button onClick={() => downloadSession(viewingSession)} title="Scarica PDF" className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-full shadow">
                                         {exportSessionData?.id === viewingSession.id ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <span><IconDownload /></span>}
                                     </button>
                                     <button onClick={() => setViewingSession(null)} className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow"><span><IconXCircle /></span></button>
                                 </div>
                                 <h2 className="text-2xl font-bold text-white mb-6 pr-24">{viewingSession.title}</h2>
-                                <div className="flex-1 overflow-y-auto space-y-4">
+                                <div className="flex-1 overflow-y-auto space-y-4 relative z-20">
                                     {viewingSession.drillIds.map((drillId, idx) => {
                                         const drill = drills.find(d => d.id === drillId);
                                         if (!drill) return null;
